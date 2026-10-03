@@ -1,0 +1,119 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link href="fonts-local.css" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { width: 1280px; height: 769px; overflow: hidden; font-family: 'Inter', sans-serif; }
+  .canvas {
+    position: relative; width: 1280px; height: 769px; overflow: hidden;
+    background:
+      radial-gradient(circle at 78% 50%, rgba(34,229,138,.22), transparent 42%),
+      radial-gradient(circle at 10% 0%, rgba(255,122,26,.18), transparent 40%),
+      linear-gradient(135deg, #070B18 0%, #0D1430 60%, #0A1A2A 100%);
+  }
+  .grid {
+    position: absolute; inset: 0; opacity: .07;
+    background-image: linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+  .left { position: absolute; left: 72px; top: 0; bottom: 0; width: 620px; display: flex; flex-direction: column; justify-content: center; }
+  .pill {
+    align-self: flex-start; font-weight: 800; font-size: 22px; letter-spacing: 3px; color: #0A0F1F;
+    background: #22E58A; padding: 10px 22px; border-radius: 999px; margin-bottom: 26px;
+  }
+  h1 { font-family: 'Anton', sans-serif; font-weight: 400; line-height: .95; text-transform: uppercase; }
+  h1 .a { display: block; font-size: 168px; color: #FF7A1A; letter-spacing: 2px; }
+  h1 .b { display: block; font-size: 104px; color: #fff; letter-spacing: 1px; }
+  .tag { margin-top: 26px; font-size: 32px; font-weight: 700; color: #C9D3F2; }
+  .tag strong { color: #22E58A; font-weight: 800; }
+  .checks { margin-top: 34px; display: flex; gap: 12px; }
+  .check {
+    display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 700; color: #fff; white-space: nowrap;
+    background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14); border-radius: 12px; padding: 12px 16px;
+  }
+  .check i { width: 24px; height: 24px; border-radius: 50%; background: #22E58A; display: grid; place-items: center; font-style: normal; color: #0A0F1F; font-size: 15px; font-weight: 800; }
+  .right { position: absolute; right: 30px; top: 50%; transform: translateY(-50%); width: 560px; height: 620px; }
+</style>
+</head>
+<body>
+<div class="canvas">
+  <div class="grid"></div>
+
+  <div class="left">
+    <div class="pill">FOR AI-BUILT APPS</div>
+    <h1><span class="a">Base44</span><span class="b">Security Fix</span></h1>
+    <div class="tag">The AI made it work. <strong>I make it safe.</strong></div>
+    <div class="checks">
+      <div class="check"><i>✓</i>Admin locked</div>
+      <div class="check"><i>✓</i>Data protected</div>
+      <div class="check"><i>✓</i>Keys secured</div>
+    </div>
+  </div>
+
+  <svg class="right" viewBox="0 0 560 620" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="win" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#1A2350"/><stop offset="1" stop-color="#111836"/>
+      </linearGradient>
+      <linearGradient id="shield" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#3CFFA4"/><stop offset="1" stop-color="#0FB86A"/>
+      </linearGradient>
+      <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="18" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="20" stdDeviation="20" flood-color="#000" flood-opacity=".5"/>
+      </filter>
+    </defs>
+
+    <!-- app window: admin dashboard -->
+    <g filter="url(#soft)" transform="rotate(-4 280 300)">
+      <rect x="40" y="80" width="470" height="380" rx="22" fill="url(#win)" stroke="rgba(255,255,255,.15)"/>
+      <rect x="40" y="80" width="470" height="54" rx="22" fill="#222C5E"/>
+      <rect x="40" y="112" width="470" height="22" fill="#222C5E"/>
+      <circle cx="72" cy="107" r="7" fill="#FF5F57"/><circle cx="96" cy="107" r="7" fill="#FEBC2E"/><circle cx="120" cy="107" r="7" fill="#28C840"/>
+      <rect x="150" y="93" width="230" height="28" rx="14" fill="#141B3D"/>
+      <text x="170" y="113" font-family="Inter" font-weight="700" font-size="16" fill="#8E9AC8">yourapp.com/admin</text>
+      <!-- sidebar -->
+      <rect x="62" y="156" width="100" height="282" rx="12" fill="rgba(255,255,255,.05)"/>
+      <rect x="78" y="176" width="68" height="10" rx="5" fill="rgba(255,255,255,.25)"/>
+      <rect x="78" y="204" width="56" height="10" rx="5" fill="rgba(255,255,255,.15)"/>
+      <rect x="78" y="232" width="62" height="10" rx="5" fill="rgba(255,255,255,.15)"/>
+      <rect x="78" y="260" width="48" height="10" rx="5" fill="rgba(255,255,255,.15)"/>
+      <!-- data rows -->
+      <g fill="rgba(255,255,255,.10)">
+        <rect x="180" y="156" width="308" height="44" rx="10"/>
+        <rect x="180" y="212" width="308" height="44" rx="10"/>
+        <rect x="180" y="268" width="308" height="44" rx="10"/>
+        <rect x="180" y="324" width="308" height="44" rx="10"/>
+        <rect x="180" y="380" width="308" height="44" rx="10"/>
+      </g>
+    </g>
+
+    <!-- shield + padlock -->
+    <g filter="url(#glow)">
+      <path d="M300 150 L420 196 V300 C420 380 368 438 300 466 C232 438 180 380 180 300 V196 Z" fill="url(#shield)"/>
+    </g>
+    <path d="M300 172 L400 210 V300 C400 366 358 414 300 440 C242 414 200 366 200 300 V210 Z" fill="none" stroke="rgba(255,255,255,.45)" stroke-width="4"/>
+    <!-- lock -->
+    <path d="M270 300 V272 a30 30 0 0 1 60 0 V300" fill="none" stroke="#0A0F1F" stroke-width="16" stroke-linecap="round"/>
+    <rect x="252" y="296" width="96" height="80" rx="14" fill="#0A0F1F"/>
+    <circle cx="300" cy="328" r="11" fill="#3CFFA4"/>
+    <rect x="295" y="332" width="10" height="24" rx="5" fill="#3CFFA4"/>
+
+    <!-- blocked user -->
+    <g transform="translate(80 486)">
+      <rect x="0" y="0" width="300" height="84" rx="42" fill="#1B1230" stroke="#FF4D5E" stroke-width="3"/>
+      <circle cx="42" cy="42" r="28" fill="#FF4D5E"/>
+      <circle cx="42" cy="34" r="10" fill="#1B1230"/>
+      <path d="M24 60 a18 14 0 0 1 36 0 Z" fill="#1B1230"/>
+      <text x="86" y="38" font-family="Inter" font-weight="800" font-size="20" fill="#FF4D5E" letter-spacing="1">ACCESS DENIED</text>
+      <text x="86" y="62" font-family="Inter" font-weight="600" font-size="16" fill="#C9A7B0">Normal user → /admin</text>
+    </g>
+  </svg>
+</div>
+</body>
+</html>
