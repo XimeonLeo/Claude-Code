@@ -210,6 +210,7 @@ function ensureSheet_(ss, name, headers) {
       var have = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
       headers.forEach(function (h) {
         if (have.indexOf(h) < 0) {
+          if (sh.getLastColumn() >= sh.getMaxColumns()) sh.insertColumnsAfter(sh.getMaxColumns(), 5);
           sh.getRange(1, sh.getLastColumn() + 1).setValue(h);
           have.push(h);
         }
