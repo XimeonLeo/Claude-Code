@@ -2,10 +2,11 @@
  * EMAIL OUTREACH TRACKER (Google Sheets + Apps Script)
  * ---------------------------------------------------
  * One master Google Sheet that:
- *   - builds its own tabs (Dashboard, Leads, Inboxes, Templates, Log, ...)
- *   - imports leads from a CSV or another Google Sheet (skips duplicates)
+ *   - builds its own tabs (Dashboard, Leads, Inboxes, Settings, Log, ...)
+ *   - imports leads from a CSV or another Google Sheet (skips duplicates),
+ *     including each lead's own personalised message and follow-ups
  *   - spreads leads across many Gmail accounts
- *   - sends first emails + follow-ups from each Gmail, on a schedule
+ *   - sends each lead's own message + follow-ups from its Gmail, on a schedule
  *   - detects replies, bounces, auto-replies and "remove me" requests
  *   - logs every single action so everything can be tracked
  *
@@ -22,7 +23,6 @@
 var SHEET = {
   DASH: 'Dashboard',
   SETTINGS: 'Settings',
-  TEMPLATES: 'Templates',
   INBOXES: 'Inboxes',
   LEADS: 'Leads',
   LOG: 'Log',
@@ -37,9 +37,10 @@ var STATUS = {
   REPLIED: 'Replied',
   BOUNCED: 'Bounced',
   UNSUB: 'Unsubscribed',
-  SKIPPED: 'Do not contact'
+  SKIPPED: 'Do not contact',
+  NEEDS: 'Needs message'
 };
-var STATUS_LIST = [STATUS.NEW, STATUS.ACTIVE, STATUS.DONE, STATUS.REPLIED,
+var STATUS_LIST = [STATUS.NEW, STATUS.NEEDS, STATUS.ACTIVE, STATUS.DONE, STATUS.REPLIED,
                    STATUS.BOUNCED, STATUS.UNSUB, STATUS.SKIPPED];
 
 var OUTCOMES = ['Interested', 'Meeting booked', 'Not interested',
@@ -49,7 +50,11 @@ var LEAD_HEADERS = ['Lead ID', 'Email', 'First Name', 'Last Name', 'Company',
   'Status', 'Assigned Inbox', 'Emails Sent', 'Email 1 Sent', 'Follow-up 1 Sent',
   'Follow-up 2 Sent', 'Next Send', 'Replied At', 'Reply Snippet', 'Bounced At',
   'Bounce Reason', 'Outcome', 'Notes', 'Source', 'Imported At', 'Subject',
-  'Variant', 'Thread ID', 'Message IDs', 'Extra Fields'];
+  'Message', 'Follow-up 1 Message', 'Follow-up 2 Message',
+  'Thread ID', 'Message IDs', 'Extra Fields'];
+
+// The columns that hold the text to send for step 1, 2, 3.
+var MESSAGE_COLS = ['Message', 'Follow-up 1 Message', 'Follow-up 2 Message'];
 
 var SENT_COLS = ['Email 1 Sent', 'Follow-up 1 Sent', 'Follow-up 2 Sent'];
 var SENT_EVENTS = ['SENT_1', 'SENT_FU1', 'SENT_FU2'];
@@ -62,7 +67,6 @@ var INBOX_FORMULA_ROWS = 60;
 var LOG_HEADERS = ['Timestamp', 'Inbox', 'Lead Email', 'Event', 'Lead ID',
   'Detail', 'Thread ID', 'Gmail Message ID'];
 
-var TEMPLATE_HEADERS = ['Step', 'Variant', 'Active', 'Subject', 'Body', 'Notes'];
 var DNC_HEADERS = ['Email or @domain', 'Reason', 'Added At'];
 
 var SETTINGS_DEF = [
@@ -82,23 +86,12 @@ var SETTINGS_DEF = [
   { key: 'minDelay', label: 'Min seconds between emails', value: 20, note: 'Random pause between sends looks more human.' },
   { key: 'maxDelay', label: 'Max seconds between emails', value: 60, note: '' },
   { key: 'bouncePause', label: 'Auto-pause inbox at bounce rate', value: 0.05, note: 'An inbox stops sending if bounces reach this rate (after 20 sends).' },
+  { key: 'signature', label: 'Signature (added under every email)', value: '{{sender_name}}', note: 'Each Gmail signs with its own Sender Name. Leave blank if your messages already end with a name.' },
+  { key: 'defSubject', label: 'Default subject (if a lead has none)', value: 'Quick question, {{first_name|there}}', note: 'Only used when the Subject column is empty.' },
+  { key: 'defFu1', label: 'Default follow-up 1 (if a lead has none)', value: 'Hi {{first_name|there}}, just bumping this to the top of your inbox in case it got buried. Would it make sense to chat?', note: 'Only used when the lead has no Follow-up 1 Message. Leave blank to skip.' },
+  { key: 'defFu2', label: 'Default follow-up 2 (if a lead has none)', value: 'Hi {{first_name|there}}, I will not keep filling your inbox, so this is my last note. If this is ever a priority, just reply and I will send details.', note: 'Only used when the lead has no Follow-up 2 Message. Leave blank to skip.' },
   { key: 'optOut', label: 'Opt-out line', value: 'P.S. Not relevant? Just reply "no" and I won\'t email you again.', note: 'Added to the end of every email. Leave blank for none.' },
   { key: 'paused', label: 'Pause everything', value: false, note: 'Set TRUE to stop all sending right away.' }
-];
-
-var SAMPLE_TEMPLATES = [
-  [1, 'A', true, 'Quick question, {{first_name|there}}',
-   'Hi {{first_name|there}},\n\nI came across {{company|your company}} and had a quick idea that could help you [benefit].\n\nWe help [type of company] [get result] without [pain point].\n\nWorth a 10-minute chat this week?\n\n{{sender_name}}',
-   'Step 1 = first email. Add more rows with the same Step and a different Variant (B, C...) to rotate wording.'],
-  [1, 'B', true, '{{company|Your team}} + [your company]',
-   'Hey {{first_name|there}},\n\n[One sentence on why you are reaching out to {{company|them}} specifically.]\n\n[One sentence on the result you get for clients like them.]\n\nOpen to hearing more?\n\n{{sender_name}}',
-   'Variants are picked at random and recorded per lead.'],
-  [2, 'A', true, '',
-   'Hi {{first_name|there}}, just bumping this to the top of your inbox in case it got buried.\n\nWould it make sense to chat?\n\n{{sender_name}}',
-   'Step 2 = follow-up 1. Sent in the same email thread, so Subject is ignored.'],
-  [3, 'A', true, '',
-   'Hi {{first_name|there}}, I will not keep filling your inbox, so this is my last note.\n\nIf [result] is ever a priority for {{company|your team}}, just reply and I will send details.\n\n{{sender_name}}',
-   'Step 3 = follow-up 2 (last).']
 ];
 
 // ---------------------------------------------------------------- menu
@@ -143,18 +136,9 @@ function setupSheet() {
     if (sv[i][0] === 'Campaign start date') st.getRange(i + 1, 2).setNumberFormat('yyyy-mm-dd');
     if (sv[i][0] === 'Auto-pause inbox at bounce rate') st.getRange(i + 1, 2).setNumberFormat('0%');
   }
-  st.setColumnWidth(1, 260); st.setColumnWidth(2, 320); st.setColumnWidth(3, 520);
+  st.setColumnWidth(1, 260); st.setColumnWidth(2, 420); st.setColumnWidth(3, 480);
+  st.getRange('B:B').setWrap(true);
   st.getRange('A:A').setFontWeight('bold');
-
-  // Templates
-  var tp = ensureSheet_(ss, SHEET.TEMPLATES, TEMPLATE_HEADERS);
-  if (tp.getLastRow() < 2) {
-    tp.getRange(2, 1, SAMPLE_TEMPLATES.length, TEMPLATE_HEADERS.length).setValues(SAMPLE_TEMPLATES);
-  }
-  tp.getRange('E:E').setWrap(true);
-  tp.setColumnWidth(4, 260); tp.setColumnWidth(5, 520); tp.setColumnWidth(6, 320);
-  tp.getRange(2, 3, 200, 1).setDataValidation(
-    SpreadsheetApp.newDataValidation().requireCheckbox().build());
 
   // Inboxes
   var ib = ensureSheet_(ss, SHEET.INBOXES, INBOX_HEADERS);
@@ -182,6 +166,10 @@ function setupSheet() {
    'Replied At', 'Bounced At', 'Imported At'].forEach(function (h) {
     ld.getRange(2, lc[h] + 1, ld.getMaxRows() - 1, 1).setNumberFormat('yyyy-mm-dd hh:mm');
   });
+  MESSAGE_COLS.concat(['Reply Snippet']).forEach(function (h) {
+    ld.setColumnWidth(lc[h] + 1, 320);
+    ld.getRange(2, lc[h] + 1, ld.getMaxRows() - 1, 1).setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+  });
   addStatusColors_(ld, lc);
 
   // Log, Import, Do Not Contact
@@ -197,9 +185,9 @@ function setupSheet() {
   buildDashboard_(ss);
 
   // Tab order and colours
-  var order = [SHEET.DASH, SHEET.LEADS, SHEET.INBOXES, SHEET.TEMPLATES,
+  var order = [SHEET.DASH, SHEET.LEADS, SHEET.INBOXES,
                SHEET.SETTINGS, SHEET.IMPORT, SHEET.LOG, SHEET.DNC];
-  var colours = ['#1a73e8', '#188038', '#e37400', '#9334e6', '#5f6368', '#12b5cb', '#5f6368', '#d93025'];
+  var colours = ['#1a73e8', '#188038', '#e37400', '#5f6368', '#12b5cb', '#5f6368', '#d93025'];
   order.forEach(function (name, idx) {
     var sh = ss.getSheetByName(name);
     ss.setActiveSheet(sh); ss.moveActiveSheet(idx + 1); sh.setTabColor(colours[idx]);
@@ -208,7 +196,7 @@ function setupSheet() {
   if (blank && blank.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(blank);
   ss.setActiveSheet(ss.getSheetByName(SHEET.DASH));
 
-  toast_('Sheet is ready. Next: fill in Settings and Templates, then import leads.');
+  toast_('Sheet is ready. Next: check Settings, connect your Gmails, then import leads.');
 }
 
 function ensureSheet_(ss, name, headers) {
@@ -261,7 +249,7 @@ function addStatusColors_(ld, lc) {
   var col = colLetter_(lc['Status'] + 1);
   var range = ld.getRange(2, 1, ld.getMaxRows() - 1, ld.getLastColumn());
   var colours = [[STATUS.REPLIED, '#d9ead3'], [STATUS.BOUNCED, '#f4cccc'],
-                 [STATUS.UNSUB, '#e0e0e0'], [STATUS.SKIPPED, '#e0e0e0'],
+                 [STATUS.UNSUB, '#e0e0e0'], [STATUS.SKIPPED, '#e0e0e0'], [STATUS.NEEDS, '#fce8b2'],
                  [STATUS.DONE, '#e8f0fe']];
   var rules = colours.map(function (c) {
     return SpreadsheetApp.newConditionalFormatRule()
@@ -424,7 +412,8 @@ function importRows_(ss, values, source) {
 
   var ld = ss.getSheetByName(SHEET.LEADS);
   var lc = colMap_(ld);
-  var res = { imported: 0, duplicate: 0, invalid: 0, blocked: 0, unassigned: 0, source: source };
+  var res = { imported: 0, duplicate: 0, invalid: 0, blocked: 0, unassigned: 0, noMessage: 0,
+              source: source, foundMessage: map.message >= 0 };
 
   var result = withLock_(function () {
     var existing = ld.getLastRow() > 1 ? ld.getRange(2, 1, ld.getLastRow() - 1, ld.getLastColumn()).getValues() : [];
@@ -483,7 +472,13 @@ function importRows_(ss, values, source) {
       line[lc['First Name']] = first;
       line[lc['Last Name']] = last;
       line[lc['Company']] = map.company >= 0 ? String(row[map.company]).trim() : '';
-      line[lc['Status']] = STATUS.NEW;
+      var cell = function (c) { return c >= 0 ? cleanText_(row[c]) : ''; };
+      line[lc['Subject']] = cell(map.subject);
+      line[lc['Message']] = cell(map.message);
+      line[lc['Follow-up 1 Message']] = cell(map.fu1);
+      line[lc['Follow-up 2 Message']] = cell(map.fu2);
+      if (!line[lc['Message']]) res.noMessage++;
+      line[lc['Status']] = line[lc['Message']] ? STATUS.NEW : STATUS.NEEDS;
       line[lc['Assigned Inbox']] = inbox;
       line[lc['Emails Sent']] = 0;
       line[lc['Source']] = source;
@@ -508,6 +503,13 @@ function importSummary_(res) {
   var msg = 'Imported ' + res.imported + ' new leads from "' + res.source + '".\n\n' +
     'Skipped: ' + res.duplicate + ' already in the sheet, ' + res.invalid + ' invalid emails, ' +
     res.blocked + ' on the Do Not Contact list.';
+  if (!res.foundMessage) {
+    msg += '\n\nWARNING: no message column was found. Name it "Message" (and optionally ' +
+      '"Subject", "Follow-up 1", "Follow-up 2"). These leads are marked "Needs message".';
+  } else if (res.noMessage) {
+    msg += '\n\n' + res.noMessage + ' leads had an empty message and are marked "Needs message". ' +
+      'Fill in their Message cell and set Status to New to send them.';
+  }
   if (res.unassigned) {
     msg += '\n\n' + res.unassigned + ' leads have no inbox yet because no inbox is Active. ' +
       'Connect your Gmails, then click "Spread waiting leads across inboxes".';
@@ -655,7 +657,6 @@ function runForInbox_() {
     var lc = colMap_(ld);
     var data = ld.getDataRange().getValues();
     var dnc = loadDnc_(ss);
-    var templates = loadTemplates_(ss);
     var maxSteps = 1 + st.followUps;
     var due = [], fresh = [];
     for (var i = 1; i < data.length; i++) {
@@ -687,14 +688,22 @@ function runForInbox_() {
       }
 
       var step = (Number(lead[lc['Emails Sent']]) || 0) + 1;
-      var tpl = pickTemplate_(templates, step, lead[lc['Variant']]);
-      if (!tpl) {
-        log_(ss, me, email, 'ERROR', leadId, 'No active template for step ' + step, '', '');
-        break;
-      }
       var vars = leadVars_(lead, lc, inbox.name);
-      var body = render_(tpl.body, vars) + (st.optOut ? '\n\n' + st.optOut : '');
-      var subject = step === 1 ? render_(tpl.subject, vars) : 'Re: ' + lead[lc['Subject']];
+      var text = messageFor_(lead, lc, step, st);
+      if (!text) {
+        if (step === 1) {
+          updateLead_(ld, lc, leadId, idx + 1, { 'Status': STATUS.NEEDS });
+          log_(ss, me, email, 'SKIPPED', leadId, 'No message to send', '', '');
+        } else {
+          // no follow-up text for this step: the sequence ends here
+          updateLead_(ld, lc, leadId, idx + 1, { 'Status': STATUS.DONE, 'Next Send': '' });
+        }
+        continue;
+      }
+      var body = composeBody_(text, vars, st);
+      var subject = step === 1
+        ? render_(String(lead[lc['Subject']] || '').trim() || st.defSubject, vars)
+        : 'Re: ' + String(lead[lc['Subject']] || '').replace(/^re:\s*/i, '');
       var prevIds = String(lead[lc['Message IDs']] || '').trim();
 
       try {
@@ -707,7 +716,7 @@ function runForInbox_() {
         var up = { 'Emails Sent': step, 'Thread ID': res.threadId,
                    'Message IDs': (prevIds + ' ' + res.messageIdHeader).trim() };
         up[SENT_COLS[step - 1]] = at;
-        if (step === 1) { up['Subject'] = subject; up['Variant'] = tpl.variant; }
+        if (step === 1) up['Subject'] = subject;
         if (step < maxSteps) {
           up['Status'] = STATUS.ACTIVE;
           up['Next Send'] = addDays_(at, step === 1 ? st.fu1Days : st.fu2Days);
@@ -848,31 +857,28 @@ function sendTestEmail() {
   var me = me_();
   var st = readSettings_(ss);
   var inbox = findInbox_(ss, me) || { name: 'Your Name' };
-  var templates = loadTemplates_(ss);
   var ld = ss.getSheetByName(SHEET.LEADS);
   var lc = colMap_(ld);
   var data = ld.getDataRange().getValues();
   var sample = null;
   for (var i = 1; i < data.length; i++) {
-    if (normEmail_(data[i][lc['Assigned Inbox']]) === me) { sample = data[i]; break; }
+    if (data[i][lc['Message']] && normEmail_(data[i][lc['Assigned Inbox']]) === me) { sample = data[i]; break; }
   }
-  if (!sample && data.length > 1) sample = data[1];
-  var vars = sample ? leadVars_(sample, lc, inbox.name)
-    : { first_name: 'Alex', last_name: 'Sample', company: 'Sample Co', email: 'alex@example.com', sender_name: inbox.name };
+  for (var k = 1; !sample && k < data.length; k++) if (data[k][lc['Message']]) sample = data[k];
+  if (!sample) return alert_('Import at least one lead with a Message first, then try again.');
 
+  var vars = leadVars_(sample, lc, inbox.name);
+  var subject = render_(String(sample[lc['Subject']] || '').trim() || st.defSubject, vars);
   var parts = [];
-  var subject = '';
   for (var step = 1; step <= 1 + st.followUps; step++) {
-    var tpl = pickTemplate_(templates, step, 'A');
-    if (!tpl) { parts.push('(No active template for step ' + step + ')'); continue; }
-    if (step === 1) subject = render_(tpl.subject, vars);
-    parts.push((step === 1 ? '===== FIRST EMAIL (variant ' + tpl.variant + ') ====='
-      : '===== FOLLOW-UP ' + (step - 1) + ' =====') + '\n\n' +
-      render_(tpl.body, vars) + (st.optOut ? '\n\n' + st.optOut : ''));
+    var text = messageFor_(sample, lc, step, st);
+    parts.push((step === 1 ? '===== FIRST EMAIL =====' : '===== FOLLOW-UP ' + (step - 1) + ' =====') +
+      '\n\n' + (text ? composeBody_(text, vars, st) : '(nothing to send for this step)'));
   }
   sendEmail_({ to: me, fromEmail: me, fromName: inbox.name, subject: '[TEST] ' + subject,
-               body: 'Preview using lead: ' + (vars.email || '') + '\n\n' + parts.join('\n\n\n') });
-  alert_('Test email sent to ' + me + '. Check that inbox.');
+               body: 'Preview of what ' + vars.email + ' would receive from ' + me + ':\n\n' +
+                     parts.join('\n\n\n') });
+  alert_('Test email sent to ' + me + ' using lead ' + vars.email + '. Check that inbox.');
 }
 
 // ---------------------------------------------------------------- sending
@@ -1007,6 +1013,10 @@ function readSettings_(ss) {
   s.weekends = toBool_(s.weekends);
   s.paused = toBool_(s.paused);
   s.optOut = String(s.optOut || '').trim();
+  s.signature = String(s.signature || '').trim();
+  s.defSubject = String(s.defSubject || '').trim();
+  s.defFu1 = String(s.defFu1 || '').trim();
+  s.defFu2 = String(s.defFu2 || '').trim();
   if (!(s.start instanceof Date)) s.start = s.start ? new Date(s.start) : new Date();
   return s;
 }
@@ -1066,18 +1076,6 @@ function processedIds_(ss, me) {
     if (normEmail_(r[1]) === me && r[7]) seen[String(r[7])] = true;
   });
   return seen;
-}
-
-function loadTemplates_(ss) {
-  var sh = ss.getSheetByName(SHEET.TEMPLATES);
-  if (!sh || sh.getLastRow() < 2) return [];
-  return sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues()
-    .filter(function (r) { return r[4] !== '' && r[0] !== ''; })
-    .map(function (r) {
-      return { step: Number(r[0]), variant: String(r[1] || 'A').trim(),
-               active: r[2] === '' ? true : toBool_(r[2]),
-               subject: String(r[3] || ''), body: String(r[4] || '') };
-    });
 }
 
 function loadDnc_(ss) {
@@ -1164,20 +1162,29 @@ function fieldKey_(h) {
 
 function mapHeaders_(headers) {
   var names = {
-    email: ['email', 'emailaddress', 'workemail', 'businessemail', 'contactemail', 'mail', 'emails', 'email1', 'primaryemail'],
+    email: ['email', 'emailaddress', 'workemail', 'businessemail', 'contactemail', 'mail', 'emails', 'primaryemail'],
     first: ['firstname', 'first', 'fname', 'givenname'],
     last: ['lastname', 'last', 'lname', 'surname', 'familyname'],
     full: ['name', 'fullname', 'contactname', 'contact', 'person'],
-    company: ['company', 'companyname', 'organization', 'organisation', 'business', 'businessname', 'account', 'accountname', 'org']
+    company: ['company', 'companyname', 'organization', 'organisation', 'business', 'businessname', 'account', 'accountname', 'org'],
+    subject: ['subject', 'subjectline', 'emailsubject', 'subject1'],
+    message: ['message', 'body', 'emailbody', 'messagebody', 'emailmessage', 'email1', 'firstemail', 'email1body',
+              'personalizedmessage', 'personalisedmessage', 'personalizedemail', 'personalisedemail',
+              'emailcopy', 'emailcontent', 'outreachmessage', 'coldemail', 'message1'],
+    fu1: ['followup1', 'followup1message', 'followupmessage1', 'fu1', 'followup', 'followupmessage',
+          'email2', 'secondemail', 'email2body', 'message2'],
+    fu2: ['followup2', 'followup2message', 'followupmessage2', 'fu2', 'email3', 'thirdemail', 'email3body', 'message3']
   };
-  var map = { email: -1, first: -1, last: -1, full: -1, company: -1, extras: [] };
+  var map = { email: -1, first: -1, last: -1, full: -1, company: -1,
+              subject: -1, message: -1, fu1: -1, fu2: -1, extras: [] };
   var norm = headers.map(normHeader_);
   Object.keys(names).forEach(function (k) {
     for (var i = 0; i < norm.length; i++) {
       if (names[k].indexOf(norm[i]) >= 0) { map[k] = i; break; }
     }
   });
-  var used = [map.email, map.first, map.last, map.full, map.company];
+  var used = [map.email, map.first, map.last, map.full, map.company,
+              map.subject, map.message, map.fu1, map.fu2];
   norm.forEach(function (n, i) { if (n && used.indexOf(i) < 0) map.extras.push(i); });
   return map;
 }
@@ -1222,14 +1229,30 @@ function leadVars_(row, lc, senderName) {
   return vars;
 }
 
-function pickTemplate_(templates, step, preferVariant) {
-  var c = templates.filter(function (t) { return t.active && t.step === step; });
-  if (!c.length) return null;
-  if (preferVariant) {
-    var same = c.filter(function (t) { return t.variant === String(preferVariant); });
-    if (same.length) return same[0];
-  }
-  return c[Math.floor(Math.random() * c.length)];
+// The text to send for a step: the lead's own message, or the default follow-up.
+function messageFor_(row, lc, step, st) {
+  var own = String(row[lc[MESSAGE_COLS[step - 1]]] || '').trim();
+  if (own) return own;
+  if (step === 2) return st.defFu1;
+  if (step === 3) return st.defFu2;
+  return '';
+}
+
+function composeBody_(text, vars, st) {
+  var body = render_(text, vars).trim();
+  var sig = render_(st.signature || '', vars).trim();
+  if (sig) body += '\n\n' + sig;
+  if (st.optOut) body += '\n\n' + render_(st.optOut, vars).trim();
+  return body;
+}
+
+// Tidies AI-written text: real line breaks, no stray quotes or spaces.
+function cleanText_(v) {
+  var s = String(v === null || v === undefined ? '' : v);
+  if (s.indexOf('\n') < 0 && /\\n/.test(s)) s = s.replace(/(\\r)?\\n/g, '\n');
+  s = s.replace(/\r\n?/g, '\n').trim();
+  if (s.length > 1 && /^".*"$/s.test(s)) s = s.slice(1, -1).trim();
+  return s;
 }
 
 function dailyLimitFor_(limit, st, dayIdx) {
@@ -1293,7 +1316,8 @@ function isUnsubscribe_(snippet) {
 if (typeof module !== 'undefined') {
   module.exports = { normEmail_: normEmail_, isValidEmail_: isValidEmail_, isBlocked_: isBlocked_,
     extractEmail_: extractEmail_, mapHeaders_: mapHeaders_, guessEmailColumn_: guessEmailColumn_,
-    tidyName_: tidyName_, render_: render_, pickTemplate_: pickTemplate_, dailyLimitFor_: dailyLimitFor_,
+    tidyName_: tidyName_, render_: render_, messageFor_: messageFor_, composeBody_: composeBody_,
+    cleanText_: cleanText_, dailyLimitFor_: dailyLimitFor_,
     runQuota_: runQuota_, isBounceSender_: isBounceSender_, isDelayNotice_: isDelayNotice_,
     bounceReason_: bounceReason_, isAutoReply_: isAutoReply_, replySnippet_: replySnippet_,
     isUnsubscribe_: isUnsubscribe_, fieldKey_: fieldKey_, colLetter_: colLetter_ };

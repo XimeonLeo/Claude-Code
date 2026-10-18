@@ -15,16 +15,57 @@ first time, then about 5 minutes per Gmail.
 | Tab | What it shows |
 |---|---|
 | **Dashboard** | Goal progress, sent, delivered, bounced, replies, reply rate, days left, how many per day you still need, a day-by-day table and chart |
-| **Leads** | One row per person: status, which Gmail it's assigned to, date of each email, next follow-up date, reply text, bounce reason, your notes |
+| **Leads** | One row per person: their personalised message and follow-ups, status, which Gmail it's assigned to, date of each email, next follow-up date, reply text, bounce reason, your notes |
 | **Inboxes** | One row per Gmail: daily limit, sent today, total sent, bounce %, reply %, health (🟢 🟡 🔴) |
-| **Templates** | Your first email and follow-ups, with optional A/B versions |
-| **Settings** | Goal, dates, daily limits, follow-up timing, send hours, pause switch |
+| **Settings** | Goal, dates, daily limits, follow-up timing, send hours, signature, backup follow-ups, pause switch |
 | **Import** | Paste new leads here to add them |
 | **Log** | Every action, timestamped: every send, reply, bounce, error |
 | **Do Not Contact** | Bounced addresses and people who asked to be removed. Never emailed again. Add `@domain.com` to block a whole company |
 
 **Lead statuses:** New → In sequence → Completed, or Replied, Bounced,
-Unsubscribed, Do not contact.
+Unsubscribed, Do not contact. **Needs message** means the lead was imported
+without a message; fill in its Message cell and set Status to New.
+
+---
+
+## What your lead files should contain
+
+See `sample-leads.csv` for an example. Each row in your CSV or Google Sheet is one person, **with the message the AI
+wrote for them**. The importer recognises these column names (capitals,
+spaces and dashes don't matter):
+
+| Column | Required? | Also recognised as |
+|---|---|---|
+| **Email** | Yes | Email Address, Work Email |
+| **First Name** | Recommended | First, or a **Full Name** / Name column |
+| **Last Name** | Optional | Surname |
+| **Company** | Optional | Company Name, Business Name, Organization |
+| **Subject** | Recommended | Subject Line, Email Subject |
+| **Message** | **Yes** | Personalized Message, Personalised Email, Body, Email 1 |
+| **Follow-up 1** | Optional | Follow Up, Follow-up 1 Message, Email 2 |
+| **Follow-up 2** | Optional | Follow-up 2 Message, Email 3 |
+
+Any other columns (Website, Industry, City, the research notes...) are kept
+with the lead, in the Extra Fields column.
+
+**If a lead has no follow-up text**, the script uses the backup follow-ups in
+Settings ("Default follow-up 1 / 2"). Clear those to send no follow-up in that case.
+**If a lead has no subject**, it uses "Default subject" from Settings.
+
+### Tell your AI to write messages like this
+
+- **Don't sign with a name.** Each Gmail adds its own name underneath
+  (Settings → Signature = `{{sender_name}}`). That way the name always matches
+  the Gmail it was sent from. If the AI must sign, have it write `{{sender_name}}`.
+- Plain text, short (50–120 words), no links or at most one, no images, no attachments.
+- No leftover blanks like `[Your Name]` or `[Company]`. Check a few rows before importing.
+- Follow-ups are short and are sent as replies in the same thread, so they don't need a subject.
+- The opt-out line from Settings is added automatically at the bottom.
+
+Placeholders such as `{{first_name}}`, `{{company}}` or `{{website}}` (any
+column name) still work inside messages if you want them, with a fallback
+like `{{first_name|there}}`. You don't need them, though: the AI can write
+the full text.
 
 ---
 
@@ -45,7 +86,6 @@ Use the Gmail that will **own** the sheet (it can also be one of your 15 senders
      the Google store. Nobody else can see your data.
    - Click the menu item again after allowing.
 8. All the tabs are created. Open **Settings** and check the values (see below).
-9. Open **Templates** and write your emails (see below).
 
 ## Part 2: Connect each Gmail (about 5 minutes each)
 
@@ -62,8 +102,9 @@ Do this for **every** sending Gmail, including the owner's.
 4. Click **📧 Outreach → Connect THIS Gmail (start sending)**.
    - Allow the permissions, same as in Part 1 step 7.
    - Type the **sender name** people should see (e.g. "Sarah Jones").
-5. Click **📧 Outreach → Send a test email to myself**. Check that Gmail's
-   inbox: you'll get a preview of the full sequence with real lead data.
+5. After you've imported leads (Part 3), click **📧 Outreach → Send a test email to myself**.
+   It sends you exactly what one of your leads would get (first email and
+   follow-ups, with the signature and opt-out line), so you can check it before anything goes out.
 6. Repeat for Gmail #2 through #15.
 7. Finally click **📧 Outreach → Spread waiting leads across inboxes**.
 
@@ -88,7 +129,8 @@ The importer:
 - finds the Email, First Name, Last Name / Full Name and Company columns automatically
 - skips duplicates (even across different files), invalid emails, and anyone on Do Not Contact
 - tidies names (`JOHN` → `John`)
-- keeps every other column (Job Title, Website, City...) so you can use it in templates as `{{job_title}}`, `{{website}}`...
+- brings in each lead's Subject, Message and Follow-ups
+- keeps every other column (Website, Industry, City...) with the lead
 - assigns each lead to the Gmail with the fewest waiting leads
 - records which file each lead came from (Source column)
 
@@ -112,6 +154,9 @@ way to get free Gmail accounts flagged.
 | Send on weekends | TRUE | Needed to hit 5,000 in 11 days |
 | Min / max seconds between emails | 20 / 60 | Random pause between sends |
 | Auto-pause inbox at bounce rate | 5% | A Gmail stops itself if it bounces too much |
+| Signature | `{{sender_name}}` | Added under every message: the Sender Name of the Gmail that sends it |
+| Default subject | "Quick question, {{first_name\|there}}" | Only for leads with no Subject |
+| Default follow-up 1 / 2 | short bump messages | Only for leads with no follow-up text. Clear to skip |
 | Opt-out line | (a P.S. line) | Added to every email |
 | Pause everything | FALSE | Emergency stop |
 
@@ -122,20 +167,6 @@ or about **5,200 delivered** at a 2% bounce rate. That includes follow-ups.
 With 2 follow-ups per lead you need about **2,000 to 2,500 leads** to reach
 5,000 messages. The Dashboard's **"Needed per day to hit goal"** tells you if
 you're falling behind. To catch up, raise the daily limit a little or add more Gmails.
-
-## Writing templates
-
-- **Step 1** = first email, **Step 2** = follow-up 1, **Step 3** = follow-up 2.
-- Follow-ups are sent as replies in the **same email thread**, so their Subject is ignored.
-- Add several rows for the same step with different **Variants** (A, B, C) and
-  each lead gets one at random. Follow-ups use the matching variant if one exists.
-  Different wording across thousands of emails helps deliverability.
-- Untick **Active** to switch a template off.
-- Placeholders: `{{first_name}}`, `{{last_name}}`, `{{company}}`, `{{email}}`,
-  `{{sender_name}}`, `{{sender_first_name}}`, plus any column from your import
-  file (e.g. `{{job_title}}`).
-- Fallbacks: `{{first_name|there}}` writes "there" when the first name is empty.
-- Plain text only. Keep links to zero or one. No images or attachments.
 
 ## How replies and bounces are tracked
 
@@ -181,7 +212,7 @@ interested...). The Dashboard counts these.
 Make a copy of the master sheet: **File → Make a copy** (the script is copied
 with it). Then, in the copy:
 1. Clear the Leads and Log tabs (keep the header rows). Keep Do Not Contact.
-2. Update Settings and Templates.
+2. Update Settings.
 3. Connect each Gmail again in the copy. Disconnect them in the old sheet first,
    so a Gmail isn't sending from two campaigns at once.
 
