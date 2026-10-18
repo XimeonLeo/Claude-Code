@@ -89,32 +89,60 @@ Use the Gmail that will **own** the sheet (it can also be one of your 15 senders
 
 ## Part 2: Connect each Gmail (about 5 minutes each)
 
-Do this for **every** sending Gmail, including the owner's.
+**The owner's Gmail** (the one that created the master sheet) connects from
+the sheet menu: **📧 Outreach → Connect THIS Gmail (start sending)**.
 
-> **Important:** use a separate browser window for each Gmail: a separate
-> Chrome profile, or an Incognito window where only that Gmail is signed in.
-> If several Gmails are signed in to the same window, Google can run the
-> script as the wrong account.
+**Every other Gmail needs its own copy of the script.** Google only lets
+the owner of a script approve Gmail access ("This app is blocked" otherwise).
+So each Gmail creates its own small script project that points at the master sheet:
 
-1. In the master sheet click **Share** and add all 15 Gmails as **Editor**. (Owner only, once.)
-2. In a window signed in to **only** Gmail #1, open the master sheet.
-3. Click **📧 Outreach → Which Gmail am I using?** and make sure it shows the right address.
-4. Click **📧 Outreach → Connect THIS Gmail (start sending)**.
-   - Allow the permissions, same as in Part 1 step 7.
-   - Type the **sender name** people should see (e.g. "Sarah Jones").
-5. After you've imported leads (Part 3), click **📧 Outreach → Send a test email to myself**.
-   It sends you exactly what one of your leads would get (first email and
-   follow-ups, with the signature and opt-out line), so you can check it before anything goes out.
-6. Repeat for Gmail #2 through #15.
-7. Finally click **📧 Outreach → Spread waiting leads across inboxes**.
+> Use a separate browser window for each Gmail: a separate Chrome profile,
+> or an Incognito window where **only that Gmail** is signed in.
+
+1. **Once, as the owner:** in the master sheet click **Share** and add all the
+   sending Gmails as **Editor**. Copy the master sheet's link from the address bar.
+2. In a window signed in to **only** Gmail #2, go to **script.google.com** and
+   click **New project**. Name it, e.g. "Outreach - Gmail 2".
+3. Delete what's in the editor and paste all of `Code.gs`.
+4. At the top of the code, fill in the two lines:
+   ```
+   var MASTER_SHEET = 'paste the master sheet link here';
+   var SENDER_NAME = 'Sarah Jones';
+   ```
+   Click 💾 **Save**.
+5. Click the **+** next to **Services** → **Gmail API** → **Add**.
+6. In the function dropdown at the top (next to **Run** / **Debug**), choose
+   **connectInbox**, then click **▶ Run**.
+   - Google asks for permission: **Review permissions** → pick this Gmail →
+     **Advanced** → **Go to Outreach - Gmail 2 (unsafe)** → **Allow**.
+     It's "unsafe" only because it's your own private script.
+   - The **Execution log** at the bottom should say **"Connected: ..."**.
+7. Check the master sheet's **Inboxes** tab: this Gmail now has a row, with
+   Status **Active** and Connected **Yes**.
+8. Repeat steps 2–7 for each remaining Gmail.
+9. Finally, in the master sheet, click **📧 Outreach → Spread waiting leads across inboxes**.
+
+**Handy functions in a Gmail's own script** (choose from the dropdown, click ▶ Run,
+read the result in the Execution log):
+- **sendTestEmail**: sends this Gmail a preview of what a lead will get (after you've imported leads)
+- **runNow**: runs one sending round right away
+- **checkNow**: checks this Gmail for replies and bounces right away
+- **disconnectInbox**: stops this Gmail from sending
+- **whoAmI**: shows which Gmail the script is running as
+
+From the owner's Gmail, the same actions are in the **📧 Outreach** menu.
 
 Each connected Gmail now runs **by itself every hour** during your send
 window, even when your computer is off. It sends only the leads assigned
 to it, at a human pace, and checks its own inbox for replies and bounces.
 
-To stop one Gmail, open the sheet as that Gmail and click **Disconnect THIS Gmail**,
-or set its Status to **Paused** on the Inboxes tab.
-To stop everything, set **Pause everything** to `TRUE` in Settings.
+To stop one Gmail, set its Status to **Paused** on the Inboxes tab (or run
+**disconnectInbox** in its script). To stop everything, set **Pause everything**
+to `TRUE` in Settings.
+
+**If you change the script later,** paste the new version into the master
+sheet's script **and** into each Gmail's own copy, keeping the two lines at
+the top filled in.
 
 ## Part 3: Add leads (any time)
 
@@ -223,7 +251,8 @@ with it). Then, in the copy:
 | No 📧 Outreach menu | Reload the sheet and wait 10 seconds |
 | "Gmail API service is not added" | Apps Script → Services **+** → Gmail API → Add |
 | A Gmail isn't sending | Check its Inboxes row: Status must be **Active**, and Last Run should update hourly. Check Settings → Pause everything, the send window, and that it has leads with status New |
-| Wrong Gmail connected | Use a window where only one Gmail is signed in. Check with "Which Gmail am I using?" |
+| Wrong Gmail connected | Use a window where only one Gmail is signed in. Check with "Which Gmail am I using?" (or whoAmI) |
+| "This app is blocked" | That Gmail is not the script's owner. Give it its own copy of the script (Part 2) |
 | "Service invoked too many times" in Log | Google's daily limit for that Gmail was hit. It resumes tomorrow. Lower its Daily Limit |
 | Leads with no inbox | Connect your Gmails, then "Spread waiting leads across inboxes" |
 | Want to re-send to a lead | Set Status back to New and Emails Sent back to 0 (restarts the sequence) |

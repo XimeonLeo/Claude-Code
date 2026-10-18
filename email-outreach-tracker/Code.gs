@@ -18,6 +18,13 @@
  *      Outreach -> Connect THIS Gmail.
  */
 
+// ---------------------------------------------------------------- per-Gmail copy settings
+// Leave these empty in the master sheet's own script.
+// In each sending Gmail's OWN copy of this script (see SETUP.md, Part 2),
+// paste the master sheet's link or ID and that Gmail's sender name.
+var MASTER_SHEET = '';   // e.g. 'https://docs.google.com/spreadsheets/d/1AbC.../edit'
+var SENDER_NAME = '';    // e.g. 'Sarah Jones'
+
 // ---------------------------------------------------------------- constants
 
 var SHEET = {
@@ -548,7 +555,7 @@ function rebalanceLeads() {
 // ---------------------------------------------------------------- connect
 
 function connectInbox() {
-  var ui = SpreadsheetApp.getUi();
+  var ui = ui_();
   var me = me_();
   if (!me) return alert_('Could not tell which Gmail you are using. Open this sheet in a browser window where only that Gmail is signed in.');
   requireGmailService_();
@@ -558,12 +565,18 @@ function connectInbox() {
   var inbox = findInbox_(ss, me);
   var ib = ss.getSheetByName(SHEET.INBOXES);
   if (!inbox) {
-    var r = ui.prompt('Add ' + me,
-      'What sender name should people see? (e.g. "Sarah Jones")', ui.ButtonSet.OK_CANCEL);
-    if (r.getSelectedButton() !== ui.Button.OK) return;
+    var name = SENDER_NAME;
+    if (!name && ui) {
+      var r = ui.prompt('Add ' + me,
+        'What sender name should people see? (e.g. "Sarah Jones")', ui.ButtonSet.OK_CANCEL);
+      if (r.getSelectedButton() !== ui.Button.OK) return;
+      name = r.getResponseText().trim();
+    }
     var row = lastFilledRow_(ib, 1) + 1;
-    ib.getRange(row, 1, 1, 4).setValues([[me, r.getResponseText().trim(), '', 'Active']]);
+    ib.getRange(row, 1, 1, 4).setValues([[me, name || '', '', 'Active']]);
     inbox = findInbox_(ss, me);
+  } else if (SENDER_NAME && !inbox.name) {
+    ib.getRange(inbox.row, 2).setValue(SENDER_NAME);
   }
 
   ScriptApp.getProjectTriggers().forEach(function (t) {
@@ -931,10 +944,24 @@ function encodeHeader_(s) {
 // ---------------------------------------------------------------- sheet helpers
 
 function ss_() {
+  if (MASTER_SHEET) {
+    var id = (String(MASTER_SHEET).match(/[-\w]{25,}/) || [])[0];
+    if (!id) throw new Error('MASTER_SHEET at the top of the script is not a valid sheet link or ID.');
+    return SpreadsheetApp.openById(id);
+  }
   var ss = null;
   try { ss = SpreadsheetApp.getActiveSpreadsheet(); } catch (e) { /* trigger context */ }
-  if (!ss) ss = SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('SSID'));
+  if (!ss) {
+    var saved = PropertiesService.getScriptProperties().getProperty('SSID');
+    if (!saved) throw new Error('This script is not attached to a sheet. Paste the master sheet link into MASTER_SHEET at the top of the script.');
+    ss = SpreadsheetApp.openById(saved);
+  }
   return ss;
+}
+
+// The sheet's pop-up box, or null when running from a per-Gmail script copy.
+function ui_() {
+  try { return SpreadsheetApp.getUi(); } catch (e) { return null; }
 }
 
 function me_() {
@@ -1120,9 +1147,14 @@ function requireGmailService_() {
   }
 }
 
-function alert_(msg) { SpreadsheetApp.getUi().alert(msg); }
+function alert_(msg) {
+  var ui = ui_();
+  if (ui) ui.alert(msg); else console.log(msg); // shown in the Apps Script "Execution log"
+}
 
-function toast_(msg) { ss_().toast(msg, 'Outreach', 8); }
+function toast_(msg) {
+  try { ss_().toast(msg, 'Outreach', 8); } catch (e) { console.log(msg); }
+}
 
 function colLetter_(n) {
   var s = '';
