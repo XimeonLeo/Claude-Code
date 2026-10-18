@@ -177,6 +177,10 @@ function setupSheet() {
     ld.setColumnWidth(lc[h] + 1, 320);
     ld.getRange(2, lc[h] + 1, ld.getMaxRows() - 1, 1).setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
   });
+  ld.getRange(2, lc['Assigned Inbox'] + 1, ld.getMaxRows() - 1, 1).setDataValidation(
+    SpreadsheetApp.newDataValidation()
+      .requireValueInRange(ss.getSheetByName(SHEET.INBOXES).getRange('A2:A'), true)
+      .setAllowInvalid(true).build());
   addStatusColors_(ld, lc);
 
   // Log, Import, Do Not Contact
@@ -365,7 +369,9 @@ function importFromTab() {
     return alert_('The Import tab is empty. Paste your leads there (header row in row 1, ' +
       'e.g. Email, First Name, Company), then run this again.');
   }
-  var res = importRows_(ss, values, 'Import tab ' + Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm'));
+  var pick = askSender_(ss);
+  if (!pick.ok) return;
+  var res = importRows_(ss, values, 'Import tab ' + Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm'), pick.inbox);
   if (res.imported > 0) sh.clearContents();
   alert_(importSummary_(res));
 }
@@ -402,7 +408,9 @@ function importFromLink() {
       '\n\nMake sure the Gmail you are using now can open it.');
   }
   if (!values || values.length < 2) return alert_('No rows found in that file.');
-  alert_(importSummary_(importRows_(ss, values, source)));
+  var pick = askSender_(ss);
+  if (!pick.ok) return;
+  alert_(importSummary_(importRows_(ss, values, source, pick.inbox)));
 }
 
 function readSheetLink_(book, url) {
@@ -413,7 +421,7 @@ function readSheetLink_(book, url) {
   return { values: tab.getDataRange().getValues(), source: book.getName() + ' / ' + tab.getName() };
 }
 
-function importRows_(ss, values, source) {
+function importRows_(ss, values, source, sendFrom) {
   var map = mapHeaders_(values[0]);
   if (map.email < 0) map.email = guessEmailColumn_(values);
   if (map.email < 0) throw new Error('Could not find an email column. Name one of your columns "Email".');
@@ -421,6 +429,7 @@ function importRows_(ss, values, source) {
   var ld = ss.getSheetByName(SHEET.LEADS);
   var lc = colMap_(ld);
   var res = { imported: 0, duplicate: 0, invalid: 0, blocked: 0, unassigned: 0, noMessage: 0,
+              chosen: 0, unknownSender: 0, sendFrom: sendFrom || '',
               source: source, foundMessage: map.message >= 0 };
 
   var result = withLock_(function () {
@@ -439,6 +448,8 @@ function importRows_(ss, values, source) {
     });
     var dnc = loadDnc_(ss);
     var inboxes = activeInboxes_(ss);
+    var known = {};
+    allInboxes_(ss).forEach(function (i) { known[i] = true; });
     inboxes.forEach(function (i) { waiting[i] = waiting[i] || 0; });
 
     var now = new Date();
@@ -466,7 +477,13 @@ function importRows_(ss, values, source) {
       });
 
       var inbox = '';
-      if (inboxes.length) {
+      var wanted = map.sendFrom >= 0 ? normEmail_(row[map.sendFrom]) : '';
+      if (wanted && !known[wanted]) { res.unknownSender++; wanted = ''; }
+      if (wanted || sendFrom) {
+        inbox = wanted || sendFrom;
+        waiting[inbox] = (waiting[inbox] || 0) + 1;
+        res.chosen++;
+      } else if (inboxes.length) {
         inbox = inboxes.reduce(function (best, i) { return waiting[i] < waiting[best] ? i : best; }, inboxes[0]);
         waiting[inbox]++;
       } else {
@@ -518,11 +535,43 @@ function importSummary_(res) {
     msg += '\n\n' + res.noMessage + ' leads had an empty message and are marked "Needs message". ' +
       'Fill in their Message cell and set Status to New to send them.';
   }
+  if (res.sendFrom) {
+    msg += '\n\nSending Gmail: ' + res.sendFrom + (res.chosen < res.imported ? ' (except rows with their own Send From)' : '') + '.';
+  } else if (res.chosen) {
+    msg += '\n\n' + res.chosen + ' leads were given the Gmail named in their Send From column; the rest were spread evenly.';
+  } else {
+    msg += '\n\nLeads were spread evenly across your active Gmails.';
+  }
+  if (res.unknownSender) {
+    msg += '\n\n' + res.unknownSender + ' rows named a Send From Gmail that is not on the Inboxes tab, ' +
+      'so they were spread evenly instead.';
+  }
   if (res.unassigned) {
     msg += '\n\n' + res.unassigned + ' leads have no inbox yet because no inbox is Active. ' +
       'Connect your Gmails, then click "Spread waiting leads across inboxes".';
   }
   return msg;
+}
+
+// Asks which Gmail should send an import. Blank = spread evenly.
+function askSender_(ss) {
+  var ui = ui_();
+  if (!ui) return { ok: true, inbox: '' };
+  var list = allInboxes_(ss);
+  var r = ui.prompt('Which Gmail should send these leads?',
+    'Leave blank and click OK to spread them evenly across all active Gmails.\n\n' +
+    'Or type ONE Gmail address to send all of them from that Gmail.' +
+    (list.length ? '\n\nYour Gmails:\n' + list.slice(0, 30).join('\n') : '') +
+    '\n\n(A "Send From" column in your file overrides this for each row.)',
+    ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return { ok: false };
+  var pick = normEmail_(r.getResponseText());
+  if (!pick) return { ok: true, inbox: '' };
+  if (list.indexOf(pick) < 0) {
+    alert_(pick + ' is not on the Inboxes tab. Connect that Gmail first, or leave the box blank. Nothing was imported.');
+    return { ok: false };
+  }
+  return { ok: true, inbox: pick };
 }
 
 function rebalanceLeads() {
@@ -532,24 +581,53 @@ function rebalanceLeads() {
   var ld = ss.getSheetByName(SHEET.LEADS);
   var lc = colMap_(ld);
   if (ld.getLastRow() < 2) return alert_('No leads yet.');
+
+  var evenAll = false;
+  var ui = ui_();
+  if (ui) {
+    var b = ui.alert('Spread waiting leads',
+      'YES = re-spread ALL waiting leads evenly across ' + inboxes.length + ' active Gmails ' +
+      '(this replaces any Gmail you picked for them).\n\n' +
+      'NO = only give a Gmail to waiting leads that have none, or whose Gmail is paused ' +
+      '(keeps the Gmails you picked).',
+      ui.ButtonSet.YES_NO_CANCEL);
+    if (b === ui.Button.CANCEL || b === ui.Button.CLOSE) return;
+    evenAll = (b === ui.Button.YES);
+  }
+
   var moved = withLock_(function () {
     var n = ld.getLastRow() - 1;
     var status = ld.getRange(2, lc['Status'] + 1, n, 1).getValues();
     var assigned = ld.getRange(2, lc['Assigned Inbox'] + 1, n, 1).getValues();
+    var active = {}, load = {};
+    inboxes.forEach(function (i) { active[i] = true; load[i] = 0; });
+    if (!evenAll) {
+      for (var a = 0; a < n; a++) {
+        var cur = normEmail_(assigned[a][0]);
+        if (status[a][0] === STATUS.NEW && active[cur]) load[cur]++;
+      }
+    }
     var k = 0, count = 0;
     for (var i = 0; i < n; i++) {
-      if (status[i][0] === STATUS.NEW) {
-        var target = inboxes[k++ % inboxes.length];
-        if (normEmail_(assigned[i][0]) !== target) count++;
-        assigned[i][0] = target;
+      if (status[i][0] !== STATUS.NEW) continue;
+      var was = normEmail_(assigned[i][0]);
+      var target;
+      if (evenAll) {
+        target = inboxes[k++ % inboxes.length];
+      } else {
+        if (active[was]) continue;
+        target = inboxes.reduce(function (best, x) { return load[x] < load[best] ? x : best; }, inboxes[0]);
+        load[target]++;
       }
+      if (was !== target) count++;
+      assigned[i][0] = target;
     }
     ld.getRange(2, lc['Assigned Inbox'] + 1, n, 1).setValues(assigned);
     return count;
   });
-  alert_('Done. Waiting leads are now spread evenly across ' + inboxes.length +
-    ' active inboxes (' + moved + ' leads moved).\n\nLeads already in a sequence stay with ' +
-    'the inbox that emailed them, so follow-ups come from the same address.');
+  alert_('Done: ' + moved + ' waiting leads were given a new Gmail' +
+    (evenAll ? ' (all waiting leads are now spread evenly across ' + inboxes.length + ' active Gmails).' : '.') +
+    '\n\nLeads already in a sequence stay with the Gmail that emailed them, so follow-ups come from the same address.');
 }
 
 // ---------------------------------------------------------------- connect
@@ -1064,6 +1142,14 @@ function findInbox_(ss, email) {
   return null;
 }
 
+function allInboxes_(ss) {
+  var ib = ss.getSheetByName(SHEET.INBOXES);
+  var n = ib ? lastFilledRow_(ib, 1) : 1;
+  if (n < 2) return [];
+  return ib.getRange(2, 1, n - 1, 1).getValues()
+    .map(function (r) { return normEmail_(r[0]); }).filter(String);
+}
+
 function activeInboxes_(ss) {
   var ib = ss.getSheetByName(SHEET.INBOXES);
   var n = lastFilledRow_(ib, 1);
@@ -1206,10 +1292,12 @@ function mapHeaders_(headers) {
               'emailcopy', 'emailcontent', 'outreachmessage', 'coldemail', 'message1'],
     fu1: ['followup1', 'followup1message', 'followupmessage1', 'fu1', 'followup', 'followupmessage',
           'email2', 'secondemail', 'email2body', 'message2'],
+    sendFrom: ['sendfrom', 'sendfromemail', 'sendfromgmail', 'sender', 'senderemail', 'sendergmail',
+               'assignedinbox', 'inbox', 'fromemail', 'sendingemail', 'sendinggmail', 'from', 'gmail'],
     fu2: ['followup2', 'followup2message', 'followupmessage2', 'fu2', 'email3', 'thirdemail', 'email3body', 'message3']
   };
   var map = { email: -1, first: -1, last: -1, full: -1, company: -1,
-              subject: -1, message: -1, fu1: -1, fu2: -1, extras: [] };
+              subject: -1, message: -1, fu1: -1, fu2: -1, sendFrom: -1, extras: [] };
   var norm = headers.map(normHeader_);
   Object.keys(names).forEach(function (k) {
     for (var i = 0; i < norm.length; i++) {
@@ -1217,7 +1305,7 @@ function mapHeaders_(headers) {
     }
   });
   var used = [map.email, map.first, map.last, map.full, map.company,
-              map.subject, map.message, map.fu1, map.fu2];
+              map.subject, map.message, map.fu1, map.fu2, map.sendFrom];
   norm.forEach(function (n, i) { if (n && used.indexOf(i) < 0) map.extras.push(i); });
   return map;
 }

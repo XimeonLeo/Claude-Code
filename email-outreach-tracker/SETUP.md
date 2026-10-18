@@ -159,8 +159,28 @@ The importer:
 - tidies names (`JOHN` → `John`)
 - brings in each lead's Subject, Message and Follow-ups
 - keeps every other column (Website, Industry, City...) with the lead
-- assigns each lead to the Gmail with the fewest waiting leads
+- gives each lead a sending Gmail (see below)
 - records which file each lead came from (Source column)
+
+### Choosing which Gmail sends which leads
+
+When you import, a box asks **"Which Gmail should send these leads?"**
+- **Leave it blank** to spread them evenly across all active Gmails.
+- **Type one Gmail address** to send the whole file from that Gmail.
+
+Other ways to control it:
+- **Per row, in your file:** add a **Send From** column with a Gmail address
+  for each lead (also recognised: Sender Email, Assigned Inbox, From).
+  It overrides the choice in the box. Rows naming a Gmail that isn't on the
+  Inboxes tab are spread evenly instead.
+- **After importing:** change a lead's **Assigned Inbox** on the Leads tab
+  (it's a dropdown). Only do this for leads with status **New**. Once a lead
+  has been emailed, its follow-ups must come from the same Gmail.
+
+**Spread waiting leads across inboxes** then asks:
+- **YES**: re-spread **all** waiting leads evenly (replaces any Gmail you picked).
+- **NO**: only give a Gmail to waiting leads that have none, or whose Gmail is
+  paused. **Your picks stay as they are.**
 
 **Run every list through an email verifier before importing**
 (NeverBounce, ZeroBounce, MillionVerifier, etc.). Bounces are the fastest
