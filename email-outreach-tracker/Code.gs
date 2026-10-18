@@ -68,7 +68,7 @@ var SENT_EVENTS = ['SENT_1', 'SENT_FU1', 'SENT_FU2'];
 
 var INBOX_HEADERS = ['Inbox Email', 'Sender Name', 'Daily Limit', 'Status',
   'Connected', 'Last Run', 'Sent Today', 'Total Sent', 'Bounces', 'Bounce %',
-  'Replies', 'Reply %', 'Leads Assigned', 'Leads Waiting', 'Health', 'Notes'];
+  'Replies', 'Reply %', 'Leads Assigned', 'Leads Waiting', 'Health', 'Notes', 'Last Result'];
 var INBOX_FORMULA_ROWS = 60;
 
 var LOG_HEADERS = ['Timestamp', 'Inbox', 'Lead Email', 'Event', 'Lead ID',
@@ -157,7 +157,7 @@ function setupSheet() {
   ib.getRange(2, 6, INBOX_FORMULA_ROWS, 1).setNumberFormat('yyyy-mm-dd hh:mm');
   ib.getRange(2, 10, INBOX_FORMULA_ROWS, 1).setNumberFormat('0.0%');
   ib.getRange(2, 12, INBOX_FORMULA_ROWS, 1).setNumberFormat('0.0%');
-  ib.setColumnWidth(1, 240); ib.setColumnWidth(2, 180);
+  ib.setColumnWidth(1, 240); ib.setColumnWidth(2, 180); ib.setColumnWidth(INBOX_HEADERS.length, 420);
 
   // Leads
   var ld = ensureSheet_(ss, SHEET.LEADS, LEAD_HEADERS);
@@ -722,9 +722,30 @@ function whoAmI() {
 
 // ---------------------------------------------------------------- the hourly run
 
-function runForMe() { runForInbox_(); }
+function runForMe() { runAndRecord_(); }
 
-function runNow() { alert_(runForInbox_()); }
+function runNow() { alert_(runAndRecord_()); }
+
+// Runs one round and writes what happened into the Inboxes tab (Last Result),
+// so you can always see why a Gmail did or did not send.
+function runAndRecord_() {
+  var result;
+  try {
+    result = runForInbox_();
+  } catch (e) {
+    result = 'ERROR: ' + e.message;
+    try { log_(ss_(), me_(), '', 'ERROR', '', 'Run failed: ' + e.message, '', ''); } catch (e2) { /* ignore */ }
+  }
+  try {
+    var ss = ss_();
+    var inbox = findInbox_(ss, me_());
+    if (inbox) {
+      setInboxCell_(ss, inbox.row, 'Last Result',
+        Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone(), 'MMM d HH:mm') + ' - ' + result);
+    }
+  } catch (e3) { /* ignore */ }
+  return result;
+}
 
 function checkNow() {
   var ss = ss_();
