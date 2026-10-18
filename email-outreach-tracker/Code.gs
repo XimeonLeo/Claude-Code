@@ -57,7 +57,7 @@ var LEAD_HEADERS = ['Lead ID', 'Email', 'First Name', 'Last Name', 'Company',
   'Status', 'Assigned Inbox', 'Emails Sent', 'Email 1 Sent', 'Follow-up 1 Sent',
   'Follow-up 2 Sent', 'Next Send', 'Replied At', 'Reply Snippet', 'Bounced At',
   'Bounce Reason', 'Outcome', 'Notes', 'Source', 'Imported At', 'Subject',
-  'Message', 'Follow-up 1 Message', 'Follow-up 2 Message',
+  'Message', 'Follow-up 1 Message', 'Follow-up 2 Message', 'Variant',
   'Thread ID', 'Message IDs', 'Extra Fields'];
 
 // The columns that hold the text to send for step 1, 2, 3.
@@ -344,6 +344,31 @@ function buildDashboard_(ss) {
   d.getRange(top + 1, 1, rows.length, heads.length).setFormulas(rows);
   d.getRange(top + 1, 2, rows.length, 1).setNumberFormat('ddd mmm d');
 
+  // Results by angle (which email approach works best)
+  var VAR = 'INDEX(Leads!$A:$BZ,0,MATCH("Variant",Leads!$1:$1,0))';
+  var at = 22, ac = 9; // starts at I22
+  d.getRange(at - 1, ac).setValue('Results by angle').setFontWeight('bold').setFontSize(12);
+  var aHeads = ['Angle', 'Leads emailed', 'Replies', 'Reply rate', 'Interested + meetings', 'Positive rate'];
+  d.getRange(at, ac, 1, aHeads.length).setValues([aHeads]).setFontWeight('bold').setBackground('#e8f0fe');
+  d.getRange(at + 1, ac).setFormula('=IFERROR(SORT(UNIQUE(FILTER(' + VAR + ',' + VAR + '<>"",' + VAR + '<>"Variant"))),"")');
+  var aRows = [];
+  for (var ar = at + 1; ar <= at + 10; ar++) {
+    var A = '$I' + ar;
+    aRows.push([
+      '=IF(' + A + '="","",COUNTIFS(' + VAR + ',' + A + ',Leads!$H:$H,">0"))',
+      '=IF(' + A + '="","",COUNTIFS(' + VAR + ',' + A + ',Leads!$F:$F,"Replied")+COUNTIFS(' + VAR + ',' + A + ',Leads!$F:$F,"Unsubscribed"))',
+      '=IF(' + A + '="","",IFERROR(K' + ar + '/J' + ar + ',0))',
+      '=IF(' + A + '="","",COUNTIFS(' + VAR + ',' + A + ',Leads!$Q:$Q,"Interested")+COUNTIFS(' + VAR + ',' + A + ',Leads!$Q:$Q,"Meeting booked"))',
+      '=IF(' + A + '="","",IFERROR(M' + ar + '/J' + ar + ',0))'
+    ]);
+  }
+  d.getRange(at + 1, ac + 1, aRows.length, 5).setFormulas(aRows);
+  d.getRange(at + 1, ac + 3, aRows.length, 1).setNumberFormat('0.0%');
+  d.getRange(at + 1, ac + 5, aRows.length, 1).setNumberFormat('0.0%');
+  d.getRange(at + 11, ac).setValue('Judge an angle only after about 100 leads emailed with it.')
+    .setFontColor('#5f6368').setFontStyle('italic');
+  d.setColumnWidth(ac, 180);
+
   d.setColumnWidth(1, 260); d.setColumnWidth(2, 120); d.setColumnWidth(3, 120);
   d.setColumnWidth(4, 180);
 
@@ -502,6 +527,7 @@ function importRows_(ss, values, source, sendFrom) {
       line[lc['Message']] = cell(map.message);
       line[lc['Follow-up 1 Message']] = cell(map.fu1);
       line[lc['Follow-up 2 Message']] = cell(map.fu2);
+      if (lc['Variant'] !== undefined) line[lc['Variant']] = cell(map.variant);
       if (!line[lc['Message']]) res.noMessage++;
       line[lc['Status']] = line[lc['Message']] ? STATUS.NEW : STATUS.NEEDS;
       line[lc['Assigned Inbox']] = inbox;
@@ -1292,12 +1318,13 @@ function mapHeaders_(headers) {
               'emailcopy', 'emailcontent', 'outreachmessage', 'coldemail', 'message1'],
     fu1: ['followup1', 'followup1message', 'followupmessage1', 'fu1', 'followup', 'followupmessage',
           'email2', 'secondemail', 'email2body', 'message2'],
+    variant: ['angle', 'variant', 'strategy', 'emailangle', 'approach', 'emailvariant', 'pitchangle'],
     sendFrom: ['sendfrom', 'sendfromemail', 'sendfromgmail', 'sender', 'senderemail', 'sendergmail',
                'assignedinbox', 'inbox', 'fromemail', 'sendingemail', 'sendinggmail', 'from', 'gmail'],
     fu2: ['followup2', 'followup2message', 'followupmessage2', 'fu2', 'email3', 'thirdemail', 'email3body', 'message3']
   };
   var map = { email: -1, first: -1, last: -1, full: -1, company: -1,
-              subject: -1, message: -1, fu1: -1, fu2: -1, sendFrom: -1, extras: [] };
+              subject: -1, message: -1, fu1: -1, fu2: -1, sendFrom: -1, variant: -1, extras: [] };
   var norm = headers.map(normHeader_);
   Object.keys(names).forEach(function (k) {
     for (var i = 0; i < norm.length; i++) {
@@ -1305,7 +1332,7 @@ function mapHeaders_(headers) {
     }
   });
   var used = [map.email, map.first, map.last, map.full, map.company,
-              map.subject, map.message, map.fu1, map.fu2, map.sendFrom];
+              map.subject, map.message, map.fu1, map.fu2, map.sendFrom, map.variant];
   norm.forEach(function (n, i) { if (n && used.indexOf(i) < 0) map.extras.push(i); });
   return map;
 }

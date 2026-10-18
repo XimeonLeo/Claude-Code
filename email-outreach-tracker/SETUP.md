@@ -14,7 +14,7 @@ first time, then about 5 minutes per Gmail.
 
 | Tab | What it shows |
 |---|---|
-| **Dashboard** | Goal progress, sent, delivered, bounced, replies, reply rate, days left, how many per day you still need, a day-by-day table and chart |
+| **Dashboard** | Goal progress, sent, delivered, bounced, replies, reply rate, days left, how many per day you still need, a day-by-day table and chart, and **Results by angle** (which email approach gets the most replies; see `prompts/README.md`) |
 | **Leads** | One row per person: their personalised message and follow-ups, status, which Gmail it's assigned to, date of each email, next follow-up date, reply text, bounce reason, your notes |
 | **Inboxes** | One row per Gmail: daily limit, sent today, total sent, bounce %, reply %, health (🟢 🟡 🔴) |
 | **Settings** | Goal, dates, daily limits, follow-up timing, send hours, signature, backup follow-ups, pause switch |

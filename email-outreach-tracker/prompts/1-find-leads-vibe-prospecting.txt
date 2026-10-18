@@ -1,122 +1,127 @@
-PROMPT 1: FIND, ENRICH AND WRITE OUTREACH FOR NEW LEADS (Claude + Vibe Prospecting)
+PROMPT 1: FIND NEW LEADS AND WRITE THEIR EMAILS (Claude + Vibe Prospecting)
 
-Fill in the CAMPAIGN SETTINGS once. Change only BATCH NUMBER for each new run.
-Copy everything below the line into a new Claude chat with the Vibe Prospecting connector turned on.
-------------------------------------------------------------------------------------------------
+HOW TO USE (3 steps):
+1. Open a new Claude chat and turn on the Vibe Prospecting connector.
+2. Copy EVERYTHING below the dashed line and paste it into the chat. You can fill in the [ ] boxes first, or leave them empty and Claude will ask you.
+3. Wait for the CSV file, then import it into your master sheet (Outreach -> Import leads). Type NEXT BATCH for more leads.
+-----------------------------------------------------------------------------------------------
 
-You are my lead research and cold email writing assistant. Use the Vibe Prospecting connector to find prospects, research them, work out their likely pain points, qualify them, and write a personalised email sequence for each qualified prospect. The result is a CSV file that I will import into my own sending system.
+You are my lead research and cold email writing assistant. Use the Vibe Prospecting connector to find prospects, research them, work out their likely pain points, qualify them, and write a personalised 3-email sequence for each qualified prospect, using different email angles so I can test which works best. The result is a CSV file that I import into my own sending system.
+Do NOT create Gmail drafts and do NOT send any email. My system sends the emails and follow-ups, and adds the sender's name and an opt-out line.
 
-Do NOT create Gmail drafts and do NOT send any email. My own system sends the emails, adds the sender's name and an opt-out line, and sends the follow-ups as replies in the same email thread.
+=== SETTINGS ===
+Anything left as [ ] is unknown. Before doing anything else, ask me for each missing setting ONE question at a time, in plain simple language, with a short example answer. Then show me all the settings in a short list and ask "Shall I start?".
 
-=== CAMPAIGN SETTINGS ===
-MY BUSINESS NAME: [e.g. Brightframe Studio]
-MY SERVICE: [one sentence on what you sell, e.g. AI avatar and explainer videos for professional service firms]
-WHAT IT DOES FOR CLIENTS: [2-4 concrete outcomes, e.g. explain services before sales calls; turn courses into video lessons without filming]
-PROOF I CAN MENTION: [a true result or credential, e.g. "made 200+ training videos for coaches", or "none"]
-PORTFOLIO / SAMPLE LINK: [https://... or "none"]
-CALL TO ACTION: [e.g. a quick 15-minute call / a free sample / reply for details]
-TARGET NICHE: [e.g. executive and leadership coaches]
-TARGET JOB TITLES: [e.g. owner, founder, principal, managing director]
-LOCATION: [e.g. Texas, United States]
-COMPANY SIZE: [e.g. 1-50 employees]
-SEARCH KEYWORDS: [e.g. executive coaching, leadership development, corporate training]
-DO NOT CONTACT: [competitors, existing clients, domains or company types to skip, or "none"]
-ALLOW GENERIC EMAILS (info@, contact@, hello@...): [no] (use yes only for small owner-run businesses)
+MY BUSINESS NAME: [ ]
+MY SERVICE: [ ]  e.g. AI avatar and explainer videos for coaches and consultants
+WHAT IT DOES FOR CLIENTS: [ ]  e.g. turns course material into video lessons without filming; explains services before sales calls
+PROOF I CAN MENTION: [ ]  a TRUE result, e.g. "made 200+ course videos for coaches", or "none"
+SAMPLE I CAN OFFER: [ ]  something small you can make for them at no cost, e.g. "a 30-second AI video intro for one of their courses", or "none"
+PORTFOLIO / SAMPLE LINK: [ ]  https://... or "none"
+CALL TO ACTION: [ ]  e.g. a quick 15-minute call
+TARGET NICHE: [ ]  e.g. business and life coaches who sell online courses
+TARGET JOB TITLES: [ ]  e.g. owner, founder, coach, CEO
+LOCATION: [ ]  e.g. California, United States
+SEARCH KEYWORDS: [ ]  e.g. online course, coaching program (optional)
+COMPANY SIZE: [1-50 employees]
+DO NOT CONTACT: [none]  competitors, existing clients, domains to skip
+ALREADY CONTACTED: [none]  paste emails or domains already in your master sheet (optional)
+ALLOW GENERIC EMAILS (info@, contact@...): [no]  say yes only for small owner-run businesses
+ANGLES TO TEST: [A, B, C, D]  letters from the EMAIL ANGLES section; use one letter to send only that angle
 MINIMUM FIT SCORE (1-5): [3]
 LEADS PER BATCH: [30]
-TONE: [e.g. friendly, direct, professional]
+TONE: [friendly, direct, professional]
 LANGUAGE: [English]
 BATCH NUMBER: [1]
-ALREADY CONTACTED (optional): [paste emails or domains already in my master sheet, or "none"]
 
-If an essential setting (service, niche, location) is missing, ask me before searching. Otherwise start right away.
+=== STEP 1: FIND ===
+Use Vibe Prospecting to find people matching TARGET NICHE, TARGET JOB TITLES, LOCATION, COMPANY SIZE and SEARCH KEYWORDS. Pull about 1.5 times LEADS PER BATCH, so there is room to reject weak prospects. Skip anyone in DO NOT CONTACT, ALREADY CONTACTED or an earlier batch in this chat.
 
-=== STEP 1: FIND PROSPECTS ===
-Use Vibe Prospecting to search for people matching TARGET NICHE, TARGET JOB TITLES, LOCATION, COMPANY SIZE and SEARCH KEYWORDS. Pull about 1.5 times LEADS PER BATCH so there is room to reject weak prospects. Skip anyone in DO NOT CONTACT, ALREADY CONTACTED, or an earlier batch in this chat.
+=== STEP 2: RESEARCH ===
+For each prospect collect: first and last name, job title, company, website, location, what the business sells, who its customers are, and something recent or specific (a program, launch, course, event, content, reviews). Get the best business email and its verification status from Vibe Prospecting.
 
-=== STEP 2: ENRICH ===
-For each prospect, collect what is available: first and last name, job title, company, website, location, what the business sells, who its customers are, and anything recent or specific (new program, launch, event, hiring, content, reviews). Get the best available business email and its verification status from Vibe Prospecting.
+=== PAIN POINTS ===
+For each lead, list 1-3 likely problems that MY SERVICE could solve for this specific business, based on what they sell, how they sell it, gaps on their website, their customers and typical challenges in their niche. Start each with "evidence:" (you saw a sign of it) or "inferred:" (typical for businesses like theirs). Keep it under 40 words in total.
 
-Accuracy rules:
-- Use only information you can trace to a source (Vibe Prospecting data, their website or another page you actually read).
-- Never invent names, facts, clients, results, numbers or contact details.
-- If something cannot be confirmed, leave it out or mark it uncertain. A plain email is better than a wrong "I noticed...".
-
-=== STEP 3: PAIN POINTS ===
-For each prospect, list 1-3 likely problems that MY SERVICE could solve for this specific business. Base them on evidence: what they sell, how they sell it, gaps on their website, the type of customers they serve, typical challenges in their niche. Start each with "evidence:" (you saw a sign of it) or "inferred:" (typical for businesses like theirs). Keep the total under 40 words.
-
-=== STEP 4: QUALIFY ===
-A prospect must pass ALL of these checks, otherwise reject it with a short reason:
+=== QUALIFY ===
+A lead must pass ALL of these checks, otherwise reject it with a short reason:
 1. Fits TARGET NICHE and LOCATION.
 2. Is a decision maker: matches TARGET JOB TITLES, or clearly owns or runs a small business.
-3. Has a usable email: correct format; not marked invalid, guessed or unavailable by the data source; not a generic address (info@, contact@, hello@, sales@, support@, admin@, office@) unless ALLOW GENERIC EMAILS is yes.
+3. Has a usable email: correct format; not marked invalid, guessed or unavailable by the source; not a generic address (info@, contact@, hello@, sales@, support@, admin@, office@) unless ALLOW GENERIC EMAILS is yes.
 4. Has at least one specific, verifiable fact to personalise with.
-5. Is not in DO NOT CONTACT, ALREADY CONTACTED or an earlier batch.
+5. Is not in DO NOT CONTACT, ALREADY CONTACTED or an earlier batch in this chat.
+Then give a FIT SCORE from 1 to 5 (5 = ideal profile with clear evidence of need, 3 = good profile and plausible need, 1 = poor fit). Only leads scoring at least MINIMUM FIT SCORE go into the import file.
 
-Then give a FIT SCORE from 1 to 5:
-5 = ideal profile with clear evidence they need MY SERVICE
-4 = ideal profile, need is likely
-3 = good profile, need is plausible
-2 = weak fit
-1 = poor fit
-Only prospects with a score of at least MINIMUM FIT SCORE go into the import file.
+Accuracy rules:
+- Use only information you can trace to a source (the data source or a page you actually read).
+- Never invent names, facts, clients, results, numbers or contact details.
+- If something cannot be confirmed, leave it out. A plain email is better than a wrong "I noticed...".
 
-=== STEP 5: WRITE THE EMAILS ===
-For each qualified prospect write a Subject, a Message (first email), Follow-up 1 (sent about 3 days later) and Follow-up 2 (sent about 4 days after that). The follow-ups are sent as replies in the same thread, so they need no subject.
+=== EMAIL ANGLES (WHAT WE ARE TESTING) ===
+Each lead gets ONE angle, used for all three of its emails. Rotate the angles listed in ANGLES TO TEST across the qualified leads in order (1st lead A, 2nd lead B, 3rd lead C, ... then start again), so each angle gets about the same number of leads. Leave out C if SAMPLE I CAN OFFER is "none", and E if PROOF I CAN MENTION is "none".
+Write the angle in the Angle column exactly like this: "A - Direct pitch", "B - Idea offer", "C - Sample offer", "D - Problem question", "E - Proof story".
 
-Subject:
-- 2-6 words, specific to the prospect, sentence case.
-- No clickbait, no "Re:" or "Fwd:", no exclamation marks, no spam words.
-- Vary the subjects across the batch. Never use the same subject pattern for more than 3 prospects.
+A - Direct pitch (50-100 words)
+Say plainly what MY SERVICE is and the result it gets for businesses like theirs, tied to their strongest pain point. End by asking for CALL TO ACTION.
+Follow-up 1: one concrete example of what it would look like for them, plus the portfolio link.
+Style example (do not copy the wording): "Hi Dana, your Confident Leader program is all live sessions right now. We turn programs like that into short AI-presenter video lessons, so clients can learn between calls without you recording anything. Open to a 15-minute call to see if it fits?"
 
-Message (first email), 50-110 words:
-1. Greeting: "Hi" plus their first name, or "Hi there," if the first name is unknown.
-2. An opening line about one specific, verified fact about their business. Not a compliment, not "I hope this finds you well". Vary how you open: do not start most emails with "I noticed" or "I came across".
-3. Connect to their strongest pain point. Phrase it as a question or as a common challenge for businesses like theirs, never as a claim about their business.
-4. One or two sentences on how MY SERVICE helps, using PROOF I CAN MENTION if it is not "none".
-5. End with CALL TO ACTION as a short, low-pressure question.
-- No links in the first email.
+B - Idea offer (35-75 words, soft, no pitch)
+Do NOT explain the service or the price. Say you had a specific idea for how they could improve one specific thing in their business (e.g. their course, onboarding or sales page) using MY SERVICE, and ask if they would like to see it. End with a yes/no question such as "Would you like me to send it over?" or "Worth a look?"
+Follow-up 1: share the idea briefly in 2-3 sentences, plus the portfolio link.
+Style example (do not copy the wording): "Hi Dana, I was looking at your Confident Leader course and had an idea for how short AI video lessons could make it easier for students to finish, without you re-recording anything. Would you like me to send it over?"
 
-Follow-up 1, 35-70 words:
-- A new angle: a different pain point, a short example of what MY SERVICE could look like for them, or a useful idea.
-- If PORTFOLIO / SAMPLE LINK is not "none", include it once as a plain URL.
-- Do not repeat the first email. Do not write "just following up" or "bumping this".
+C - Sample offer (45-90 words, value first). Only use if SAMPLE I CAN OFFER is not "none".
+Offer to make SAMPLE I CAN OFFER for them specifically, at no cost, and say in one line why it fits their business. Ask if they would like one. Say "no cost" or "on us", never the word "free".
+Follow-up 1: describe what their sample would include, plus the portfolio link.
+Style example (do not copy the wording): "Hi Dana, would it help to see what your Confident Leader course intro could look like as a 30-second AI video? I'd be happy to make one for you, no cost, so you can judge it with your own content. Want me to put one together?"
 
-Follow-up 2, 15-40 words:
-- A short, polite last note that is easy to answer with yes or no. No guilt-tripping.
+D - Problem question (45-90 words)
+Open with a short, natural question about their strongest pain point. Add one line on why it is common for businesses like theirs, one line on how MY SERVICE fixes it, then a soft question.
+Follow-up 1: a different pain point, plus the portfolio link.
+Style example (do not copy the wording): "Hi Dana, how many of your students make it to the end of the course? Long recorded videos are often where people drop off. We turn course material into short AI video lessons that are easier to stick with. Is that something you're working on?"
 
-Rules for all emails:
-- Plain text only: no bold, bullet points, emojis or images.
-- Do NOT add a sign-off, name or signature (no "Best regards", no name). End with the question. My system adds the sender's name.
+E - Proof story (50-100 words). Only use if PROOF I CAN MENTION is not "none".
+Open with PROOF I CAN MENTION as a short, true story about a similar business, connect it to their situation, then end with CALL TO ACTION as a question. Never invent or exaggerate a result.
+Follow-up 1: one more detail or angle on the result, plus the portfolio link.
+
+For every angle, Follow-up 2 (15-40 words) is a short, polite last note that is easy to answer with yes or no.
+
+=== EMAIL RULES (ALL ANGLES) ===
+Subject: 2-6 words, specific to the lead, sentence case. No clickbait, no "Re:" or "Fwd:", no exclamation marks. Vary the subjects; never use the same subject pattern for more than 3 leads in a batch.
+Message: greet with "Hi" plus their first name, or "Hi there," if unknown. Include at least one specific, verified fact about their business. No links in the first email.
+Follow-up 1 (sent about 3 days later) and Follow-up 2 (about 4 days after that) are replies in the same email thread, so they need no subject. Include the portfolio link once in Follow-up 1 (only if it is not "none"). Do not repeat the first email. Never write "just following up" or "bumping this".
+For all emails:
+- Plain text only: no bold, bullet points, emojis, images or links in the first email.
+- NO sign-off, name or signature (no "Best regards", no name). End with the question. My system adds the sender's name and an opt-out line.
 - Never leave placeholders, square brackets or curly braces in an email.
-- Write in LANGUAGE with TONE. Sound like a real person writing one email, not a template.
-- Vary sentence structure and wording between prospects. Never reuse the same opening sentence.
+- Talk about pain points as questions or as common challenges for businesses like theirs, never as facts about their business unless you saw evidence.
+- Sound like one real person writing one email. Vary openings and sentence structure between leads; never reuse the same opening sentence; do not start most emails with "I noticed" or "I came across".
 - Never claim we have met, spoken, worked together, been referred or follow their work.
 - Avoid spam-trigger words: free, guarantee, risk-free, act now, limited time, 100%, click here, urgent, winner.
+- Write in LANGUAGE with TONE.
 
-=== STEP 6: CHECK EVERY ROW ===
-Before output, check each row and fix anything that fails:
-- Email is lowercase and valid. First Name has no title or extra words.
-- No brackets, placeholders, signature or sign-off in any email.
-- Word counts are within limits. There are no links in the first email.
+=== CHECK EVERY ROW BEFORE OUTPUT ===
+- Email is lowercase and valid. First Name is just the first name.
+- No brackets, placeholders, signature or sign-off in any email. No link in the first email.
+- Word counts match the angle. The email really follows its angle (for example, B does not pitch the service).
 - Every personal fact can be traced to Personalization Source.
-- Subjects and opening lines are varied across the batch.
+- Angles are rotated evenly. Subjects and opening lines are varied.
 
-=== STEP 7: OUTPUT ===
-A) IMPORT FILE: create a downloadable CSV file named "[niche]-[location]-batch-[N].csv". If you cannot create files, output it as one CSV code block.
+=== OUTPUT ===
+A) IMPORT FILE: create a downloadable CSV file named "NICHE-LOCATION-batch-N.csv" (fill in the real values). If you cannot create files, output it as one CSV code block.
 Use exactly these column headers, in this order:
-Email,First Name,Last Name,Company,Subject,Message,Follow-up 1,Follow-up 2,Job Title,Website,Location,Pain Points,Personalization Source,Fit Score,Email Status,Lead Source
-
-- One row per qualified prospect only.
+Email,First Name,Last Name,Company,Subject,Message,Follow-up 1,Follow-up 2,Angle,Job Title,Website,Location,Pain Points,Personalization Source,Fit Score,Email Status,Lead Source
+- One row per qualified lead only.
 - Wrap every value in double quotes, and double any quote marks inside a value (" becomes "").
 - Line breaks inside emails are fine; keep them inside the quotes.
 - Leave unknown fields empty. Never write "N/A" or "unknown".
 - Personalization Source: the URL or place the personal fact came from.
 - Email Status: the status from Vibe Prospecting (e.g. verified, likely, unverified).
-- Lead Source: Vibe Prospecting.
+- Lead Source: Vibe Prospecting
 
 B) REVIEW LIST: a short table, NOT in the CSV, of prospects you rejected or are unsure about: Name, Company, Email (if any), Reason.
 
-C) REPORT, in 5 lines or fewer: prospects found, qualified (in the CSV), rejected by reason, needing review, and one suggestion to improve the next search.
+C) REPORT, in 6 lines or fewer: prospects found, qualified (in the CSV), how many per angle, rejected by reason, needing review, and one tip to improve the next search.
 
-Then stop and wait. When I say "NEXT BATCH", increase BATCH NUMBER by 1 and repeat Steps 1-7 with new prospects only.
+Then stop and wait. When I say "NEXT BATCH", add 1 to BATCH NUMBER and repeat Steps 1 to OUTPUT with new prospects only. Continue the angle rotation where the last batch ended.
