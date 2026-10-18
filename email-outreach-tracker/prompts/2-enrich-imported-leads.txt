@@ -1,0 +1,131 @@
+PROMPT 2: ENRICH A LEAD LIST FROM APOLLO, APIFY OR ANOTHER SOURCE, AND WRITE OUTREACH (Claude)
+
+Fill in the CAMPAIGN SETTINGS once. Attach your exported lead file (CSV or Excel) to the chat, or paste a Google Sheet link if Claude can read it.
+Works best with web search turned on, so Claude can read each prospect's website.
+Copy everything below the line into a new Claude chat.
+------------------------------------------------------------------------------------------------
+
+You are my lead research and cold email writing assistant. I have attached a lead list. Clean it, research each lead, work out their likely pain points, qualify them, and write a personalised email sequence for each qualified lead. The result is a CSV file that I will import into my own sending system.
+
+Do NOT create Gmail drafts and do NOT send any email. My own system sends the emails, adds the sender's name and an opt-out line, and sends the follow-ups as replies in the same email thread.
+
+=== CAMPAIGN SETTINGS ===
+LEAD SOURCE: [e.g. Apollo / Apify Google Maps scraper / LinkedIn export / other]
+MY BUSINESS NAME: [e.g. Brightframe Studio]
+MY SERVICE: [one sentence on what you sell]
+WHAT IT DOES FOR CLIENTS: [2-4 concrete outcomes]
+PROOF I CAN MENTION: [a true result or credential, or "none"]
+PORTFOLIO / SAMPLE LINK: [https://... or "none"]
+CALL TO ACTION: [e.g. a quick 15-minute call / a free sample / reply for details]
+TARGET NICHE: [e.g. real estate agents]
+TARGET JOB TITLES: [e.g. owner, broker, team lead, founder]
+LOCATION: [e.g. Florida, United States]
+DO NOT CONTACT: [competitors, existing clients, domains or company types to skip, or "none"]
+ALLOW GENERIC EMAILS (info@, contact@, hello@...): [no] (use yes only for small owner-run businesses, such as many Google Maps leads)
+MINIMUM FIT SCORE (1-5): [3]
+LEADS PER BATCH: [30]
+TONE: [e.g. friendly, direct, professional]
+LANGUAGE: [English]
+ALREADY CONTACTED (optional): [paste emails or domains already in my master sheet, or "none"]
+
+=== STEP 1: READ AND MAP THE FILE (first batch only) ===
+Read the attached file. Work out which columns hold: email, first name, last name (or full name), job title, company, website, location, LinkedIn URL, and email status or verification. Column names vary by source, e.g. Apollo uses "Title", "Company Name for Emails", "Email Status"; scrapers may use "name", "emails", "site".
+Show me the mapping as a short table, plus the total row count, then continue. If there is no email column at all, stop and tell me.
+
+=== STEP 2: CLEAN THE WHOLE FILE (first batch only) ===
+Before researching anyone, remove and count:
+- duplicate emails, and duplicate people at the same company
+- rows with no email or an invalid email format
+- emails marked by the source as anything other than verified or valid (e.g. Apollo "guessed", "unavailable", "bounced"). If the file has no status column, keep the email but set Email Status to "unverified".
+- generic addresses (info@, contact@, hello@, sales@, support@, admin@, office@) unless ALLOW GENERIC EMAILS is yes
+- anyone in DO NOT CONTACT or ALREADY CONTACTED
+Report the counts in 3 lines. The leads that remain are the work list, in file order.
+
+=== STEP 3: RESEARCH (one batch at a time) ===
+Take the next LEADS PER BATCH leads from the work list. For each one, read their website (homepage, about and services pages) and any other reliable public page you can access. Find out what the business sells, who its customers are, and something recent or specific (a new program, launch, event, hiring, content, reviews).
+If you have no web access, use only the data in the file and say so in the report.
+
+Accuracy rules:
+- Use only information you can trace to a source (the file or a page you actually read).
+- Never invent names, facts, clients, results, numbers or contact details.
+- If something cannot be confirmed, leave it out or mark it uncertain. A plain email is better than a wrong "I noticed...".
+- If the file has no person's name (common with Google Maps scrapes), leave First Name empty. Do not guess a name from the email address unless it is clearly a first name (e.g. sarah@ ... becomes Sarah).
+
+=== STEP 4: PAIN POINTS ===
+For each lead, list 1-3 likely problems that MY SERVICE could solve for this specific business. Base them on evidence: what they sell, how they sell it, gaps on their website, the type of customers they serve, typical challenges in their niche. Start each with "evidence:" (you saw a sign of it) or "inferred:" (typical for businesses like theirs). Keep the total under 40 words.
+
+=== STEP 5: QUALIFY ===
+A lead must pass ALL of these checks, otherwise reject it with a short reason:
+1. Fits TARGET NICHE and LOCATION.
+2. Is a decision maker: matches TARGET JOB TITLES, or clearly owns or runs a small business. For company-only leads with a generic email allowed, the business itself must fit.
+3. Has a usable email (survived Step 2).
+4. Has at least one specific, verifiable fact to personalise with.
+5. Is not a duplicate of a lead in an earlier batch.
+
+Then give a FIT SCORE from 1 to 5:
+5 = ideal profile with clear evidence they need MY SERVICE
+4 = ideal profile, need is likely
+3 = good profile, need is plausible
+2 = weak fit
+1 = poor fit
+Only leads with a score of at least MINIMUM FIT SCORE go into the import file.
+
+=== STEP 6: WRITE THE EMAILS ===
+For each qualified lead write a Subject, a Message (first email), Follow-up 1 (sent about 3 days later) and Follow-up 2 (sent about 4 days after that). The follow-ups are sent as replies in the same thread, so they need no subject.
+
+Subject:
+- 2-6 words, specific to the lead, sentence case.
+- No clickbait, no "Re:" or "Fwd:", no exclamation marks, no spam words.
+- Vary the subjects across the batch. Never use the same subject pattern for more than 3 leads.
+
+Message (first email), 50-110 words:
+1. Greeting: "Hi" plus their first name, or "Hi there," if the first name is unknown.
+2. An opening line about one specific, verified fact about their business. Not a compliment, not "I hope this finds you well". Vary how you open: do not start most emails with "I noticed" or "I came across".
+3. Connect to their strongest pain point. Phrase it as a question or as a common challenge for businesses like theirs, never as a claim about their business.
+4. One or two sentences on how MY SERVICE helps, using PROOF I CAN MENTION if it is not "none".
+5. End with CALL TO ACTION as a short, low-pressure question.
+- No links in the first email.
+
+Follow-up 1, 35-70 words:
+- A new angle: a different pain point, a short example of what MY SERVICE could look like for them, or a useful idea.
+- If PORTFOLIO / SAMPLE LINK is not "none", include it once as a plain URL.
+- Do not repeat the first email. Do not write "just following up" or "bumping this".
+
+Follow-up 2, 15-40 words:
+- A short, polite last note that is easy to answer with yes or no. No guilt-tripping.
+
+Rules for all emails:
+- Plain text only: no bold, bullet points, emojis or images.
+- Do NOT add a sign-off, name or signature (no "Best regards", no name). End with the question. My system adds the sender's name.
+- Never leave placeholders, square brackets or curly braces in an email.
+- Write in LANGUAGE with TONE. Sound like a real person writing one email, not a template.
+- Vary sentence structure and wording between leads. Never reuse the same opening sentence.
+- Never claim we have met, spoken, worked together, been referred or follow their work.
+- Avoid spam-trigger words: free, guarantee, risk-free, act now, limited time, 100%, click here, urgent, winner.
+
+=== STEP 7: CHECK EVERY ROW ===
+Before output, check each row and fix anything that fails:
+- Email is lowercase and valid. First Name has no title or extra words.
+- No brackets, placeholders, signature or sign-off in any email.
+- Word counts are within limits. There are no links in the first email.
+- Every personal fact can be traced to Personalization Source.
+- Subjects and opening lines are varied across the batch.
+
+=== STEP 8: OUTPUT ===
+A) IMPORT FILE: create a downloadable CSV file named "[niche]-[location]-batch-[N].csv". If you cannot create files, output it as one CSV code block.
+Use exactly these column headers, in this order:
+Email,First Name,Last Name,Company,Subject,Message,Follow-up 1,Follow-up 2,Job Title,Website,Location,Pain Points,Personalization Source,Fit Score,Email Status,Lead Source
+
+- One row per qualified lead only.
+- Wrap every value in double quotes, and double any quote marks inside a value (" becomes "").
+- Line breaks inside emails are fine; keep them inside the quotes.
+- Leave unknown fields empty. Never write "N/A" or "unknown".
+- Personalization Source: the URL or place the personal fact came from.
+- Email Status: the status from the file (e.g. verified), or "unverified" if the file had none.
+- Lead Source: LEAD SOURCE.
+
+B) REVIEW LIST: a short table, NOT in the CSV, of leads you rejected or are unsure about: Name, Company, Email, Reason.
+
+C) REPORT, in 5 lines or fewer: leads processed in this batch, qualified (in the CSV), rejected by reason, leads left on the work list, and anything I should know (e.g. no web access, many generic emails).
+
+Then stop and wait. When I say "NEXT BATCH", take the next LEADS PER BATCH leads from the work list and repeat Steps 3-8.
