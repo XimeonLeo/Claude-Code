@@ -3,11 +3,37 @@
 These prompts find or research leads, write a personalised 3-email sequence
 for each one, and give you a CSV to import into your master sheet.
 
-## Which prompt do I use?
+## Start here: the master prompt (for everyone)
+
+**`0-MASTER-PROMPT.txt`** is the one prompt the whole team uses. It always gives
+the same file, in the same format, so imports don't break.
+
+1. Fill in **PART 1** only: your first and last name, your sending Gmail,
+   target audience, location and how many leads. Don't touch PART 2 or PART 3.
+2. Paste the whole prompt into a new chat (Claude, ChatGPT, Gemini or Grok)
+   with web search on.
+3. Download the CSV file it gives you. Don't copy cells by hand.
+4. Master sheet: **📧 Outreach → Upload a lead file (CSV)** → choose the file →
+   **Check file** → **Import**.
+
+What it guarantees:
+- Fixed headers, the same as the master sheet (see `../lead-template.csv`).
+- It finds each lead's real email (lead tools, then the company website,
+  then public pages) and **never guesses** one.
+- A lead only goes in the file when Email, First Name, Company, Subject,
+  Message, Follow-up 1, Follow-up 2, Angle, Send From and Added By are all
+  filled. The rest are listed under "Left out".
+- **Send From** = your Gmail, so your leads are sent from your Gmail.
+  **Added By** = your name, so you can see who added what.
+
+**Team leader:** fill PART 2 (service, proof, sample, link, angles) once, then
+share that copy with everyone.
+
+## Other prompts (advanced)
 
 | You have... | Use |
 |---|---|
-| **No leads yet** | `1-find-leads-vibe-prospecting.txt` |
+| **No leads yet, and Vibe Prospecting** | `1-find-leads-vibe-prospecting.txt` |
 | **A list from Apollo, Apify, LinkedIn or anywhere else** | `2-enrich-imported-leads.txt` |
 
 ## 5 steps, every time
@@ -21,8 +47,8 @@ for each one, and give you a CSV to import into your master sheet.
 3. **Wait** for the CSV file and the short report.
 4. **Spot-check 3 rows:** read the emails, and click one Personalization
    Source link to make sure the fact is true.
-5. **Import** into the master sheet: **📧 Outreach → Import leads from a link**
-   (or paste into the Import tab). Then type **NEXT BATCH** in Claude for more.
+5. **Import** into the master sheet: **📧 Outreach → Upload a lead file (CSV)**
+   (or Import leads from a link, or paste into the Import tab). Then type **NEXT BATCH** in Claude for more.
 
 **Save time next round:** once Claude has your answers, ask it to *"give me
 this prompt with my settings filled in"*. Save that copy for this niche, so

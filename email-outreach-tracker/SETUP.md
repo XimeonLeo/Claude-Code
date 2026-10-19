@@ -30,6 +30,10 @@ without a message; fill in its Message cell and set Status to New.
 
 ## What your lead files should contain
 
+**Easiest: have everyone use `prompts/0-MASTER-PROMPT.txt`.** It always produces
+the same columns (empty template: `lead-template.csv`) and leaves out any lead
+without an email, name, message or follow-ups.
+
 See `sample-leads.csv` for an example. Each row in your CSV or Google Sheet is one person, **with the message the AI
 wrote for them**. The importer recognises these column names (capitals,
 spaces and dashes don't matter):
@@ -146,9 +150,17 @@ the top filled in.
 
 ## Part 3: Add leads (any time)
 
+**Option 1 (easiest): upload the file.** Click **📧 Outreach → Upload a lead file (CSV)**.
+Choose the CSV file (or paste the CSV text, or rows copied from a sheet, into the box),
+choose the Gmail, click **Check file**, then **Import**.
+The check shows which required columns are there (✔/✘), how many cells are empty,
+and the first lead, before anything is imported.
+Excel file? Open it in Google Sheets, then File → Download → CSV first.
+
 **Option A (paste):** open your CSV or sheet, copy everything including the
 header row, paste into the **Import** tab at cell A1, then click
 **📧 Outreach → Import leads from the Import tab**.
+If the pasted CSV lands all in column A, that's fine: the importer splits it.
 
 **Option B (link):** click **📧 Outreach → Import leads from a link** and paste
 a link to a Google Sheet, or to a CSV file in your Google Drive.
@@ -274,6 +286,8 @@ with it). Then, in the copy:
 | Wrong Gmail connected | Use a window where only one Gmail is signed in. Check with "Which Gmail am I using?" (or whoAmI) |
 | "This app is blocked" | That Gmail is not the script's owner. Give it its own copy of the script (Part 2) |
 | "Service invoked too many times" in Log | Google's daily limit for that Gmail was hit. It resumes tomorrow. Lower its Daily Limit |
+| "Some columns are missing" on import | The file wasn't made with the master prompt. Make it again with `prompts/0-MASTER-PROMPT.txt`, or click Yes to import anyway and fill the gaps in Leads |
+| Pasted leads all in one column | Fine, the importer splits them. Or use Upload a lead file instead |
 | Leads with no inbox | Connect your Gmails, then "Spread waiting leads across inboxes" |
 | Want to re-send to a lead | Set Status back to New and Emails Sent back to 0 (restarts the sequence) |
 

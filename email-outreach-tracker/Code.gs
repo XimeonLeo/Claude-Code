@@ -107,6 +107,7 @@ function onOpen() {
   SpreadsheetApp.getUi().createMenu('📧 Outreach')
     .addItem('1. Set up / repair this sheet', 'setupSheet')
     .addSeparator()
+    .addItem('Upload a lead file (CSV) - easiest', 'showUploadDialog')
     .addItem('Import leads from the Import tab', 'importFromTab')
     .addItem('Import leads from a link (Sheet or CSV)...', 'importFromLink')
     .addItem('Spread waiting leads across inboxes', 'rebalanceLeads')
@@ -389,16 +390,19 @@ function importFromTab() {
   var ss = ss_();
   var sh = ss.getSheetByName(SHEET.IMPORT);
   if (!sh) return alert_('Run Outreach -> 1. Set up this sheet first.');
-  var values = sh.getDataRange().getValues();
+  var values = trimToHeader_(unsplitPasted_(sh.getDataRange().getValues()));
   if (values.length < 2) {
     return alert_('The Import tab is empty. Paste your leads there (header row in row 1, ' +
-      'e.g. Email, First Name, Company), then run this again.');
+      'e.g. Email, First Name, Company), then run this again.\n\n' +
+      'Easier: use Outreach -> Upload a lead file (CSV).');
   }
+  var chk = checkLeadRows_(values);
+  if (!confirmMissing_(chk)) return;
   var pick = askSender_(ss);
   if (!pick.ok) return;
   var res = importRows_(ss, values, 'Import tab ' + Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm'), pick.inbox);
   if (res.imported > 0) sh.clearContents();
-  alert_(importSummary_(res));
+  alert_(importSummary_(res) + gapsText_(chk));
 }
 
 function importFromLink() {
@@ -424,7 +428,7 @@ function importFromLink() {
         var got2 = readSheetLink_(SpreadsheetApp.openById(id), url);
         values = got2.values; source = got2.source;
       } else {
-        values = Utilities.parseCsv(file.getBlob().getDataAsString());
+        values = leadRowsFromText_(file.getBlob().getDataAsString());
         source = file.getName();
       }
     }
@@ -432,10 +436,231 @@ function importFromLink() {
     return alert_('Could not open that file: ' + e.message +
       '\n\nMake sure the Gmail you are using now can open it.');
   }
-  if (!values || values.length < 2) return alert_('No rows found in that file.');
+  values = trimToHeader_(unsplitPasted_(values || []));
+  if (values.length < 2) return alert_('No rows found in that file.');
+  var chk = checkLeadRows_(values);
+  if (!confirmMissing_(chk)) return;
   var pick = askSender_(ss);
   if (!pick.ok) return;
-  alert_(importSummary_(importRows_(ss, values, source, pick.inbox)));
+  alert_(importSummary_(importRows_(ss, values, source, pick.inbox)) + gapsText_(chk));
+}
+
+// ---------------------------------------------------------------- upload a lead file
+
+// Opens a small window: pick a CSV file (or paste the text), choose a Gmail, check, import.
+function showUploadDialog() {
+  var ss = ss_();
+  if (!ss.getSheetByName(SHEET.LEADS)) return alert_('Run Outreach -> 1. Set up this sheet first.');
+  var options = allInboxes_(ss).map(function (i) {
+    return '<option value="' + i + '">' + i + '</option>';
+  }).join('');
+  var html = HtmlService.createHtmlOutput(UPLOAD_HTML_.replace('{{OPTIONS}}', options))
+    .setWidth(680).setHeight(600);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Upload a lead file');
+}
+
+// Called by the upload window: checks the file without importing anything.
+function previewLeadText(text) {
+  var rows = leadRowsFromText_(text);
+  if (rows.length < 2) {
+    return { leads: 0, error: 'No leads found. The first line must be the column names, for example: Email,First Name,Company,...' };
+  }
+  return checkLeadRows_(rows);
+}
+
+// Called by the upload window: imports the leads and returns the summary text.
+function importLeadText(text, inbox, name) {
+  var ss = ss_();
+  var rows = leadRowsFromText_(text);
+  if (rows.length < 2) throw new Error('No leads found. The first line must be the column names.');
+  inbox = normEmail_(inbox);
+  if (inbox && allInboxes_(ss).indexOf(inbox) < 0) throw new Error(inbox + ' is not on the Inboxes tab.');
+  var source = (name || 'Upload') + ' ' + Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm');
+  return importSummary_(importRows_(ss, rows, source, inbox)) + gapsText_(checkLeadRows_(rows));
+}
+
+var UPLOAD_HTML_ = [
+  '<style>',
+  'body{font-family:Arial,sans-serif;font-size:14px;color:#222;margin:0;padding:2px 6px}',
+  'h3{margin:14px 0 6px;font-size:15px}',
+  'textarea{width:100%;box-sizing:border-box;height:100px;font-family:monospace;font-size:12px}',
+  'select{font-size:14px;padding:6px;max-width:100%}',
+  '.btn{background:#1a73e8;color:#fff;border:0;border-radius:4px;padding:9px 18px;font-size:14px;cursor:pointer}',
+  '.btn:disabled{background:#9bb8e8}',
+  '.ok{color:#188038;white-space:nowrap}.bad{color:#c5221f;font-weight:bold;white-space:normal}',
+  '.box{border:1px solid #ddd;border-radius:6px;padding:10px;margin-top:10px;background:#fafafa;white-space:pre-wrap}',
+  '.hint{color:#666;margin:6px 0}',
+  '</style>',
+  '<h3>1. Choose your lead file</h3>',
+  '<input type="file" id="file" accept=".csv,.tsv,.txt,text/csv">',
+  '<div class="hint">or paste the CSV text, or rows copied from a sheet (with the header row), here:</div>',
+  '<textarea id="paste" placeholder="Email,First Name,Last Name,Company,Subject,Message,Follow-up 1,Follow-up 2,..."></textarea>',
+  '<h3>2. Which Gmail sends them?</h3>',
+  '<select id="inbox"><option value="">Spread evenly across all Gmails</option>{{OPTIONS}}</select>',
+  '<div class="hint">A Send From column in the file wins over this choice.</div>',
+  '<p><button class="btn" id="check" onclick="check()">Check file</button></p>',
+  '<div id="out"></div>',
+  '<script>',
+  'var fileText = "", fileName = "";',
+  'document.getElementById("file").addEventListener("change", function (e) {',
+  '  var f = e.target.files[0]; if (!f) return;',
+  '  if (/\\.xlsx?$/i.test(f.name)) { show("<p class=bad>That is an Excel file. Open it in Google Sheets or Excel, choose File, Download, CSV, then pick the CSV here.</p>"); return; }',
+  '  var r = new FileReader();',
+  '  r.onload = function () { fileText = r.result; fileName = f.name; document.getElementById("paste").value = ""; show("<p>Loaded " + esc(f.name) + ". Click Check file.</p>"); };',
+  '  r.readAsText(f);',
+  '});',
+  'function current() { var p = document.getElementById("paste").value; return p.trim() ? { text: p, name: "Pasted leads" } : { text: fileText, name: fileName || "Uploaded file" }; }',
+  'function check() {',
+  '  var c = current(); if (!c.text.trim()) { show("<p class=bad>Choose a file or paste your leads first.</p>"); return; }',
+  '  busy(true, "Checking..."); google.script.run.withSuccessHandler(function (p) { busy(false); preview(p); }).withFailureHandler(fail).previewLeadText(c.text);',
+  '}',
+  'function preview(p) {',
+  '  if (!p.leads) { show("<p class=bad>" + esc(p.error || "No leads with an email were found.") + "</p>"); return; }',
+  '  var h = "<div class=box><b>" + p.leads + " leads found.</b>\\n";',
+  '  p.columns.forEach(function (c) { h += (c.ok ? "<span class=ok>&#10004; " : "<span class=bad>&#10008; ") + esc(c.label) + "</span>   "; });',
+  '  if (p.gaps.length) h += "\\n\\nEmpty cells: " + p.gaps.map(function (g) { return esc(g.label) + " (" + g.count + ")"; }).join(", ");',
+  '  if (p.noEmail) h += "\\n" + p.noEmail + " rows have no email and will be skipped.";',
+  '  if (p.sample) h += "\\n\\nFirst lead: " + esc(p.sample);',
+  '  h += "</div>";',
+  '  if (p.missing.length) h += "<p class=bad>Missing columns: " + esc(p.missing.join(", ")) + ". Best fix: make the file again with the master prompt.</p><p><button class=btn onclick=go()>Import anyway</button></p>";',
+  '  else h += "<p><button class=btn onclick=go()>Import " + p.leads + " leads</button></p>";',
+  '  show(h);',
+  '}',
+  'function go() {',
+  '  var c = current(); busy(true, "Importing... this can take a minute.");',
+  '  google.script.run.withSuccessHandler(function (msg) { busy(false); show("<div class=box>" + esc(msg) + "</div><p><button class=btn onclick=google.script.host.close()>Close</button></p>"); })',
+  '    .withFailureHandler(fail).importLeadText(c.text, document.getElementById("inbox").value, c.name);',
+  '}',
+  'function fail(e) { busy(false); show("<p class=bad>" + esc(e && e.message ? e.message : e) + "</p>"); }',
+  'function busy(b, m) { document.getElementById("check").disabled = b; if (b) show("<p>" + m + "</p>"); }',
+  'function show(h) { document.getElementById("out").innerHTML = h; }',
+  'function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", \'"\': "&quot;" }[c]; }); }',
+  '</script>'
+].join('\n');
+
+// ---------------------------------------------------------------- reading lead files
+
+// Turns CSV or tab-separated text into rows. Handles text copied from an AI chat
+// (```csv fences, a sentence before the header) and rows copied from a sheet.
+function parseCsvText_(text) {
+  var t = String(text || '').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+  t = t.split('\n').filter(function (l) { return !/^\s*```/.test(l); }).join('\n');
+  var lines = t.split('\n');
+  var head = lines.filter(function (l) { return /e-?mail/i.test(l); })[0] ||
+             lines.filter(function (l) { return l.trim(); })[0] || '';
+  var count = function (ch) { return head.split(ch).length - 1; };
+  var delim = ',';
+  if (count('\t') > count(',') && count('\t') >= count(';')) delim = '\t';
+  else if (count(';') > count(',')) delim = ';';
+
+  var rows = [], row = [], cell = '', quoted = false;
+  for (var i = 0; i < t.length; i++) {
+    var ch = t.charAt(i);
+    if (quoted) {
+      if (ch === '"') {
+        if (t.charAt(i + 1) === '"') { cell += '"'; i++; } else quoted = false;
+      } else cell += ch;
+    } else if (ch === '"' && cell.trim() === '') {
+      quoted = true; cell = '';
+    } else if (ch === delim) {
+      row.push(cell); cell = '';
+    } else if (ch === '\n') {
+      row.push(cell); rows.push(row); row = []; cell = '';
+    } else cell += ch;
+  }
+  row.push(cell); rows.push(row);
+  return rows.filter(function (r) { return r.some(function (c) { return String(c).trim() !== ''; }); });
+}
+
+// Skips any lines above the header row (the first row that names an email column).
+function trimToHeader_(rows) {
+  for (var i = 0; i < Math.min(rows.length, 15); i++) {
+    if (mapHeaders_(rows[i]).email >= 0) return rows.slice(i);
+  }
+  return rows;
+}
+
+// Makes every row as wide as the widest one, so missing cells read as empty.
+function padRows_(rows) {
+  var w = rows.reduce(function (m, r) { return Math.max(m, r.length); }, 0);
+  return rows.map(function (r) { while (r.length < w) r.push(''); return r; });
+}
+
+function leadRowsFromText_(text) {
+  return padRows_(trimToHeader_(parseCsvText_(text)));
+}
+
+// CSV text pasted into the Import tab often lands in column A only. Split it properly.
+function unsplitPasted_(values) {
+  if (!values.length) return values;
+  var wide = values.some(function (r) {
+    return r.slice(1).some(function (c) { return String(c).trim() !== ''; });
+  });
+  if (wide) return values;
+  var text = values.map(function (r) { return String(r[0]); }).join('\n');
+  if (!/[,\t;]/.test(text.split('\n')[0]) && !/[,\t;]/.test(text)) return values;
+  var rows = padRows_(trimToHeader_(parseCsvText_(text)));
+  return rows.length >= 2 && rows[0].length > 1 ? rows : values;
+}
+
+var REQUIRED_COLS_ = [['email', 'Email'], ['first', 'First Name'], ['subject', 'Subject'],
+                      ['message', 'Message'], ['fu1', 'Follow-up 1'], ['fu2', 'Follow-up 2']];
+
+// Checks a lead file before import: which required columns exist and how many cells are empty.
+function checkLeadRows_(rows) {
+  var map = mapHeaders_(rows[0] || []);
+  if (map.email < 0 && rows.length > 1) map.email = guessEmailColumn_(rows);
+  var cols = REQUIRED_COLS_.map(function (c) {
+    var idx = map[c[0]];
+    if (c[0] === 'first' && idx < 0) idx = map.full;
+    return { label: c[1], idx: idx };
+  });
+  var empty = cols.map(function () { return 0; });
+  var leads = 0, noEmail = 0, sample = '';
+  for (var r = 1; r < rows.length; r++) {
+    var row = rows[r];
+    var email = map.email >= 0 ? normEmail_(row[map.email]) : '';
+    if (!email) { noEmail++; continue; }
+    leads++;
+    cols.forEach(function (c, k) {
+      if (c.idx >= 0 && String(row[c.idx] === undefined || row[c.idx] === null ? '' : row[c.idx]).trim() === '') empty[k]++;
+    });
+    if (!sample) {
+      var pick = function (i) { return i >= 0 ? String(row[i] || '').trim() : ''; };
+      sample = [email, pick(cols[1].idx), pick(map.company), pick(map.subject)].filter(String).join(' | ');
+    }
+  }
+  return {
+    leads: leads,
+    noEmail: noEmail,
+    columns: cols.map(function (c) { return { label: c.label, ok: c.idx >= 0 }; }),
+    missing: cols.filter(function (c) { return c.idx < 0; }).map(function (c) { return c.label; }),
+    gaps: cols.map(function (c, k) { return { label: c.label, count: empty[k] }; })
+              .filter(function (g) { return g.count > 0; }),
+    sample: sample
+  };
+}
+
+// Asks before importing a file that is missing required columns. True = go ahead.
+function confirmMissing_(chk) {
+  var ui = ui_();
+  if (!chk.missing.length || !ui) return true;
+  var r = ui.alert('Some columns are missing',
+    'This file has no ' + chk.missing.join(', ') + ' column.\n\n' +
+    'Best fix: make the file again with the master prompt (prompts/0-MASTER-PROMPT.txt).\n\n' +
+    'Import it anyway?', ui.ButtonSet.YES_NO);
+  return r === ui.Button.YES;
+}
+
+// Extra lines for the import summary about missing columns and empty cells.
+function gapsText_(chk) {
+  var t = '';
+  if (chk.missing.length) t += '\n\nMISSING COLUMNS: ' + chk.missing.join(', ') + '.';
+  if (chk.gaps.length) {
+    t += '\n\nEmpty cells: ' + chk.gaps.map(function (g) { return g.label + ' (' + g.count + ')'; }).join(', ') +
+      '. Fill them in on the Leads tab before those emails are due.';
+  }
+  return t;
 }
 
 function readSheetLink_(book, url) {
@@ -1336,13 +1561,17 @@ function mapHeaders_(headers) {
     subject: ['subject', 'subjectline', 'emailsubject', 'subject1'],
     message: ['message', 'body', 'emailbody', 'messagebody', 'emailmessage', 'email1', 'firstemail', 'email1body',
               'personalizedmessage', 'personalisedmessage', 'personalizedemail', 'personalisedemail',
-              'emailcopy', 'emailcontent', 'outreachmessage', 'coldemail', 'message1'],
+              'emailcopy', 'emailcontent', 'outreachmessage', 'coldemail', 'message1', 'firstmessage',
+              'initialemail', 'openingemail', 'email1message', 'mainmessage', 'firstemailmessage'],
     fu1: ['followup1', 'followup1message', 'followupmessage1', 'fu1', 'followup', 'followupmessage',
-          'email2', 'secondemail', 'email2body', 'message2'],
+          'email2', 'secondemail', 'email2body', 'message2', 'firstfollowup', 'followupemail1',
+          'followup1email', 'fu1email', 'fu1message', 'followupone'],
     variant: ['angle', 'variant', 'strategy', 'emailangle', 'approach', 'emailvariant', 'pitchangle'],
     sendFrom: ['sendfrom', 'sendfromemail', 'sendfromgmail', 'sender', 'senderemail', 'sendergmail',
-               'assignedinbox', 'inbox', 'fromemail', 'sendingemail', 'sendinggmail', 'from', 'gmail'],
-    fu2: ['followup2', 'followup2message', 'followupmessage2', 'fu2', 'email3', 'thirdemail', 'email3body', 'message3']
+               'assignedinbox', 'inbox', 'fromemail', 'sendingemail', 'sendinggmail', 'from', 'gmail',
+               'mysendinggmail', 'sendinggmailaddress', 'yourgmail', 'mygmail'],
+    fu2: ['followup2', 'followup2message', 'followupmessage2', 'fu2', 'email3', 'thirdemail', 'email3body', 'message3',
+          'secondfollowup', 'followupemail2', 'followup2email', 'fu2email', 'fu2message', 'followuptwo']
   };
   var map = { email: -1, first: -1, last: -1, full: -1, company: -1,
               subject: -1, message: -1, fu1: -1, fu2: -1, sendFrom: -1, variant: -1, extras: [] };

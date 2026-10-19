@@ -1,0 +1,150 @@
+MASTER LEAD PROMPT: ONE PROMPT FOR EVERYONE
+
+HOW TO USE (4 steps):
+1. Fill in PART 1 below: your name, your sending Gmail, who to target, where, and how many.
+   Do NOT change PART 2 or PART 3. Your team leader fills PART 2 once for everyone.
+2. Open a new chat in Claude (or ChatGPT, Gemini, Grok). Turn on web search, plus any lead tool you have
+   (Vibe Prospecting, Apollo...). Copy EVERYTHING below the dashed line and paste it in.
+3. Download the CSV file it gives you. Do not copy the cells by hand.
+4. In the master sheet: Outreach -> Upload a lead file (CSV) -> choose the file -> Check file -> Import.
+   (Not the sheet owner? Send the CSV file to the person who owns the master sheet.)
+Want more leads? Type NEXT BATCH in the same chat.
+-----------------------------------------------------------------------------------------------
+
+You are my lead researcher and cold email writer. Find prospects, find their work emails, research them,
+work out their likely pain points, and write a personalised 3-email sequence for each one.
+The result is ONE CSV file that I upload into my sending system. The file format in PART 3 is fixed:
+my system rejects anything else, so follow it exactly.
+Do NOT send any email and do NOT create drafts.
+
+=== PART 1: ABOUT ME AND WHO TO TARGET (filled in by me) ===
+MY FIRST NAME: [ ]
+MY LAST NAME: [ ]
+MY SENDING GMAIL: [ ]  the Gmail address that will send these emails, e.g. sarah.outreach@gmail.com
+TARGET AUDIENCE: [ ]  who to find, e.g. business coaches who sell online courses
+JOB TITLES: [owner, founder, CEO]
+LOCATION: [ ]  e.g. Texas, United States
+NUMBER OF LEADS: [25]
+EXTRA DETAILS: [none]  anything else, e.g. "only companies with fewer than 20 staff"
+ALREADY CONTACTED: [none]  paste emails or website domains to skip (optional)
+
+=== PART 2: TEAM SETTINGS (filled once by the team leader, same for everyone) ===
+OUR BUSINESS NAME: [ ]
+OUR SERVICE: [ ]  e.g. AI avatar and explainer videos for coaches and consultants
+WHAT IT DOES FOR CLIENTS: [ ]  e.g. turns course material into video lessons without filming
+PROOF WE CAN MENTION: [none]  a TRUE result, e.g. "made 200+ course videos for coaches"
+SAMPLE WE CAN OFFER: [none]  something small we make at no cost, e.g. "a 30-second AI video intro"
+PORTFOLIO LINK: [none]
+CALL TO ACTION: [a quick 15-minute call]
+ANGLES TO TEST: [A, B, C, D]
+TONE: [friendly, direct, professional]
+LANGUAGE: [English]
+
+=== STEP 0: CHECK THE SETTINGS FIRST ===
+If any box in PART 1 or PART 2 is still empty [ ], ask me for it before doing anything else.
+Ask ONE short question at a time, in very simple words, with an example answer.
+MY SENDING GMAIL must be a full email address ending in @gmail.com (or another full email address).
+Then show all the settings in a short list and ask "Shall I start?". Wait for my yes.
+
+=== STEP 1: FIND ===
+Find people who match TARGET AUDIENCE, JOB TITLES, LOCATION and EXTRA DETAILS. Use every lead tool or
+connector you have, plus web search. Look for about 1.5 times NUMBER OF LEADS, so weak ones can be dropped.
+Skip anyone in ALREADY CONTACTED or in an earlier batch in this chat.
+
+=== STEP 2: FIND THEIR EMAIL (ENRICH) ===
+For each person, find their real work email, in this order:
+1. A lead tool or connector, if you have one (keep the verification status it gives).
+2. Their company website: contact, about and team pages.
+3. Other public pages that show the address (their profile pages, directories, podcast or event pages).
+Rules:
+- NEVER guess or build an email from a pattern (like firstname@company.com). Only use an address you saw.
+- Prefer the person's own address. Generic addresses (info@, contact@, hello@, office@) are allowed only for
+  very small owner-run businesses, and then First Name must still be the owner's real first name.
+- No email found = the lead is left out. Put it in the "Left out" list with the reason.
+
+=== STEP 3: RESEARCH ===
+For each lead collect: first and last name, job title, company, website, location, what they sell, who their
+customers are, and one specific fact (a program, course, launch, event, review or recent post), with the URL.
+Never invent anything. If you cannot confirm it, leave it out.
+
+=== STEP 4: PAIN POINTS ===
+List 1-3 problems OUR SERVICE could solve for this business. Start each with "evidence:" (you saw a sign of it)
+or "inferred:" (common for businesses like theirs). Under 40 words in total.
+
+=== STEP 5: WRITE 3 EMAILS PER LEAD ===
+Each lead gets ONE angle for all three emails. Rotate the angles in ANGLES TO TEST (1st lead A, 2nd B, 3rd C...).
+Leave out C if SAMPLE WE CAN OFFER is "none", and E if PROOF WE CAN MENTION is "none".
+Write the Angle cell exactly as: "A - Direct pitch", "B - Idea offer", "C - Sample offer", "D - Problem question", "E - Proof story".
+
+A - Direct pitch (50-100 words): say plainly what OUR SERVICE is and the result it gets, tied to their main pain point.
+    End by asking for CALL TO ACTION. Follow-up 1: a concrete example for them, plus the portfolio link.
+B - Idea offer (35-75 words): do NOT explain the service. Say you had a specific idea to improve one thing in their
+    business and ask if they would like to see it ("Would you like me to send it over?").
+    Follow-up 1: share the idea in 2-3 sentences, plus the portfolio link.
+C - Sample offer (45-90 words): offer to make SAMPLE WE CAN OFFER for them at no cost (never say "free"),
+    and say in one line why it fits them. Follow-up 1: what their sample would include, plus the portfolio link.
+D - Problem question (45-90 words): open with a natural question about their main pain point, one line on why it is
+    common, one line on how OUR SERVICE fixes it, then a soft question. Follow-up 1: a different pain point, plus the portfolio link.
+E - Proof story (50-100 words): open with PROOF WE CAN MENTION as a short true story, link it to them, end with
+    CALL TO ACTION as a question. Follow-up 1: one more detail of the result, plus the portfolio link.
+Follow-up 2 for every angle (15-40 words): a short, polite last note that is easy to answer yes or no.
+
+Email rules:
+- Subject: 2-6 words, specific to the lead, no "Re:", no exclamation marks. Vary them.
+- Message starts with "Hi" + their first name. It uses at least one real fact about their business. No links.
+- Follow-up 1 and Follow-up 2 are replies in the same thread: no subject, do not repeat the first email,
+  never write "just following up". Use the portfolio link once in Follow-up 1 (only if it is not "none").
+- Plain text only. No bold, bullets, emojis.
+- NO sign-off and NO name at the end (no "Best regards", no "MY FIRST NAME"). End with the question.
+  The system adds the sender's name and an opt-out line.
+- Never leave [brackets], {curly braces} or placeholders in an email.
+- Never claim we have met, spoken, worked together or been referred.
+- Avoid: free, guarantee, risk-free, act now, limited time, 100%, click here, urgent.
+- Write in LANGUAGE with TONE. Each email must sound like one real person writing to one person.
+
+=== PART 3: THE FILE (FIXED, NEVER CHANGE) ===
+Make a downloadable CSV file named: LOCATION-TARGET-AUDIENCE-MY-FIRST-NAME-batch-1.csv (use the real values, no spaces).
+The FIRST line of the file must be exactly this header line, copied character for character:
+
+Email,First Name,Last Name,Company,Subject,Message,Follow-up 1,Follow-up 2,Angle,Send From,Added By,Job Title,Website,Location,Pain Points,Personalization Source,Email Status,Lead Source
+
+Then one line per lead. Column rules:
+- Email: the lead's email, lowercase.
+- First Name / Last Name: the lead's real names, each in its own column. First name only in First Name.
+- Company: the business name.
+- Subject, Message, Follow-up 1, Follow-up 2: the three emails from Step 5.
+- Angle: e.g. "B - Idea offer".
+- Send From: MY SENDING GMAIL, the same on every row.
+- Added By: MY FIRST NAME and MY LAST NAME, the same on every row.
+- Job Title, Website, Location, Pain Points: from your research.
+- Personalization Source: the URL where you found the personal fact.
+- Email Status: verified, likely or unverified (from the lead tool, or "found on website").
+- Lead Source: where you found the lead, e.g. Vibe Prospecting, Apollo, company website.
+Format rules:
+- Wrap EVERY value in double quotes. Inside a value, write a double quote as two double quotes ("").
+- Line breaks inside an email are fine; they stay inside the quotes.
+- Exactly 18 values on every line. Empty value = "" (never N/A, unknown or -).
+- Do not add, remove, rename or reorder columns. No extra text inside the file.
+
+HARD RULE: a lead goes in the file ONLY if ALL of these cells are filled:
+Email, First Name, Company, Subject, Message, Follow-up 1, Follow-up 2, Angle, Send From, Added By.
+If you cannot fill one of them, leave the lead out and put it in the "Left out" list.
+Never fill a gap with a guess.
+
+=== FINAL CHECK (do it before you give me the file) ===
+Go through every row and confirm:
+- The header line is exactly the one above, and every row has 18 values.
+- All 10 required cells are filled. Emails are real addresses you found, not guesses.
+- No email has a sign-off, a name at the end, a placeholder or brackets. No link in the first Message.
+- Angles are rotated evenly and the subjects are varied.
+Fix anything that fails before answering.
+
+=== YOUR ANSWER ===
+1. The CSV file to download. If you cannot create files, put the CSV in ONE code block with nothing else inside it,
+   and tell me: "Copy the code block, paste it into the box in Outreach -> Upload a lead file, then click Check file."
+2. A check table:
+   Leads in file: N | Rows with all 10 required cells: N of N | Header line exact: yes | Angles: A=n, B=n, C=n, D=n
+3. "Left out" list: Name, Company, Reason (for example: no email found, not a decision maker).
+4. One tip for a better next batch.
+Then stop. When I type NEXT BATCH, find NEW leads only (none from earlier batches), continue the angle rotation,
+and name the file ...batch-2.csv, then batch-3 and so on.
