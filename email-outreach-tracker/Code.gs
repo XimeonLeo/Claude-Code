@@ -27,6 +27,11 @@
 var MASTER_SHEET = '';   // e.g. 'https://docs.google.com/spreadsheets/d/1AbC.../edit'
 var SENDER_NAME = '';    // e.g. 'Sarah Jones'
 
+// ---------------------------------------------------------------- admins
+// Only these Gmails can use "Outreach -> Admin: watch team sheets".
+// Fill this in BEFORE you give Code.gs to your team. Separate several with commas.
+var ADMINS = '';         // e.g. 'you@gmail.com, partner@gmail.com'
+
 // ---------------------------------------------------------------- constants
 
 var SHEET = {
@@ -1201,7 +1206,20 @@ var TEAM_HISTORY_HEADERS = ['Checked At', 'Name', 'Leads', 'Waiting', 'Total Sen
 var HOW_VERSION = 'Open their sheet -> File -> Version history -> See version history. It shows who changed what, and you can restore it.';
 var HOW_REPAIR = 'If they have an older copy of the script, paste the latest Code.gs and click Set up / repair. Otherwise: ' + HOW_VERSION;
 
+// True when the Gmail running this is listed in ADMINS (or ADMINS is still empty).
+function isAdmin_() {
+  var list = String(ADMINS || '').split(/[\s,;]+/).map(normEmail_).filter(String);
+  return !list.length || list.indexOf(me_()) >= 0;
+}
+
+function notAdmin_() {
+  if (isAdmin_()) return false;
+  alert_('Only the admin can use this. Ask your admin if you need to see the team overview.');
+  return true;
+}
+
 function addTeamSheet() {
+  if (notAdmin_()) return;
   var ui = SpreadsheetApp.getUi();
   var ss = ss_();
   teamSetup_(ss);
@@ -1216,15 +1234,16 @@ function addTeamSheet() {
   alert_(refreshTeam_());
 }
 
-function refreshTeam() { alert_(refreshTeam_()); }
-function refreshTeamAuto() { refreshTeam_(); }
+function refreshTeam() { if (notAdmin_()) return; alert_(refreshTeam_()); }
+function refreshTeamAuto() { if (isAdmin_()) refreshTeam_(); }
 
 function teamAutoOn() {
+  if (notAdmin_()) return;
   teamAutoOff_();
   ScriptApp.newTrigger('refreshTeamAuto').timeBased().everyHours(2).create();
   alert_('Automatic checks are on. Every 2 hours the Team tab is updated and any changes are written to Team Alerts.');
 }
-function teamAutoOff() { teamAutoOff_(); alert_('Automatic checks are off.'); }
+function teamAutoOff() { if (notAdmin_()) return; teamAutoOff_(); alert_('Automatic checks are off.'); }
 function teamAutoOff_() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'refreshTeamAuto') ScriptApp.deleteTrigger(t);
@@ -1245,6 +1264,17 @@ function teamSetup_(ss) {
   }
   ensureSheet_(ss, TEAM.ALERTS, TEAM_ALERT_HEADERS).setColumnWidth(4, 420);
   ensureSheet_(ss, TEAM.HISTORY, TEAM_HISTORY_HEADERS);
+  // Only the owner of this sheet can change the alert history, even if others can edit the sheet.
+  [TEAM.ALERTS, TEAM.HISTORY].forEach(function (name) {
+    var t = ss.getSheetByName(name);
+    if (!t.getProtections(SpreadsheetApp.ProtectionType.SHEET).length) {
+      try {
+        var p = t.protect().setDescription('Only the admin can change this');
+        p.removeEditors(p.getEditors());
+        if (p.canDomainEdit()) p.setDomainEdit(false);
+      } catch (e) { /* not the owner: leave as is */ }
+    }
+  });
 }
 
 function refreshTeam_() {

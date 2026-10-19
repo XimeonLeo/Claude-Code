@@ -146,7 +146,14 @@ tabs (keep the header rows), update Settings, and connect the new Gmails (Part 2
 
 If you've set this system up for other people, you can watch all their sheets from your own master sheet.
 
+**First, lock it to you.** Before giving `Code.gs` to anyone, open it and fill in the line near the top:
+```
+var ADMINS = 'you@gmail.com';
+```
+Then only that Gmail can use the Admin menu. Everyone gets this same file.
+
 **Each team member (once):** in their master sheet click **Share** → add your Gmail → **Viewer** → Send.
+Share **only** with the admins. Nobody can watch a sheet that wasn't shared with them.
 They must also have the latest `Code.gs` and have clicked **Set up / repair**.
 
 **You (once):**
@@ -173,6 +180,17 @@ The history is stored in **your** sheet, so they can't change it.
 - 🟡 Daily limit above 35, warm-up off, opt-out line removed, follow-ups off, sending paused.
 - 🟡 Leads set back to New after being emailed, leads marked Replied by hand, duplicate leads.
 - 🟡 High bounce rate, Gmails paused, nothing sent in 24 hours, no leads waiting.
+
+**Making someone else an admin:**
+- **To let them see everything:** share your master sheet with them as **Viewer**.
+  They see the Team, Team Alerts and Team History tabs, kept up to date by your automatic checks.
+  They can't change anything. This is the easiest option.
+- **To let them run checks themselves:** add their Gmail to `ADMINS`
+  (`var ADMINS = 'you@gmail.com, partner@gmail.com';`), and have each team member share their sheet with them too.
+- **To remove an admin:** stop sharing your master sheet with them, take them out of `ADMINS`,
+  and ask your team to remove them from their Share list.
+
+Team Alerts and Team History are locked: only you (the sheet's owner) can edit them, even if you give someone Editor access.
 
 **To see exactly what someone changed:** open their sheet → **File → Version history → See version history**.
 It shows who edited what and when, and you can restore an earlier version.
