@@ -3,7 +3,7 @@
  * ---------------------------------------------------
  * One master Google Sheet that:
  *   - builds its own tabs (Dashboard, Leads, Inboxes, Settings, Log, ...)
- *   - imports leads from a CSV or another Google Sheet (skips duplicates),
+ *   - imports leads from a CSV file (skips duplicates),
  *     including each lead's own personalised message and follow-ups
  *   - spreads leads across many Gmail accounts
  *   - sends each lead's own message + follow-ups from its Gmail, on a schedule
@@ -14,8 +14,10 @@
  *   1. Paste this file into Extensions -> Apps Script of a blank Google Sheet.
  *   2. Add the "Gmail API" service (Services + -> Gmail API -> Add).
  *   3. Reload the sheet, click Outreach -> 1. Set up this sheet.
- *   4. Share the sheet with every sending Gmail, and in each one click
- *      Outreach -> Connect THIS Gmail.
+ *   4. Owner: Outreach -> Connect THIS Gmail. Every other Gmail: its own copy
+ *      of this script with MASTER_SHEET and SENDER_NAME filled in, then run
+ *      connectInbox (SETUP.md, Part 2).
+ *   5. Leads: LEAD-PROMPT.txt, then Outreach -> Upload a lead file (CSV).
  */
 
 // ---------------------------------------------------------------- per-Gmail copy settings
@@ -107,9 +109,7 @@ function onOpen() {
   SpreadsheetApp.getUi().createMenu('📧 Outreach')
     .addItem('1. Set up / repair this sheet', 'setupSheet')
     .addSeparator()
-    .addItem('Upload a lead file (CSV) - easiest', 'showUploadDialog')
-    .addItem('Import leads from the Import tab', 'importFromTab')
-    .addItem('Import leads from a link (Sheet or CSV)...', 'importFromLink')
+    .addItem('Upload a lead file (CSV)', 'showUploadDialog')
     .addItem('Spread waiting leads across inboxes', 'rebalanceLeads')
     .addSeparator()
     .addItem('Connect THIS Gmail (start sending)', 'connectInbox')
@@ -187,10 +187,9 @@ function setupSheet() {
   // Log, Import, Do Not Contact
   var lg = ensureSheet_(ss, SHEET.LOG, LOG_HEADERS);
   lg.getRange('A:A').setNumberFormat('yyyy-mm-dd hh:mm:ss');
-  var im = ensureSheet_(ss, SHEET.IMPORT, null);
-  im.getRange('A1').setNote('Paste leads here with the header row in row 1 ' +
-    '(e.g. Email, First Name, Company). Then click Outreach -> Import leads from the Import tab. ' +
-    'This tab is cleared after each import.');
+  // The old Import tab is no longer used (Outreach -> Upload a lead file replaces it).
+  var oldImport = ss.getSheetByName(SHEET.IMPORT);
+  if (oldImport && oldImport.getLastRow() === 0) ss.deleteSheet(oldImport);
   ensureSheet_(ss, SHEET.DNC, DNC_HEADERS);
 
   // Dashboard (rebuilt every time, holds no data of its own)
@@ -198,8 +197,8 @@ function setupSheet() {
 
   // Tab order and colours
   var order = [SHEET.DASH, SHEET.LEADS, SHEET.INBOXES,
-               SHEET.SETTINGS, SHEET.IMPORT, SHEET.LOG, SHEET.DNC];
-  var colours = ['#1a73e8', '#188038', '#e37400', '#5f6368', '#12b5cb', '#5f6368', '#d93025'];
+               SHEET.SETTINGS, SHEET.LOG, SHEET.DNC];
+  var colours = ['#1a73e8', '#188038', '#e37400', '#5f6368', '#5f6368', '#d93025'];
   order.forEach(function (name, idx) {
     var sh = ss.getSheetByName(name);
     ss.setActiveSheet(sh); ss.moveActiveSheet(idx + 1); sh.setTabColor(colours[idx]);
@@ -384,68 +383,7 @@ function buildDashboard_(ss) {
   d.insertChart(chart);
 }
 
-// ---------------------------------------------------------------- import
-
-function importFromTab() {
-  var ss = ss_();
-  var sh = ss.getSheetByName(SHEET.IMPORT);
-  if (!sh) return alert_('Run Outreach -> 1. Set up this sheet first.');
-  var values = trimToHeader_(unsplitPasted_(sh.getDataRange().getValues()));
-  if (values.length < 2) {
-    return alert_('The Import tab is empty. Paste your leads there (header row in row 1, ' +
-      'e.g. Email, First Name, Company), then run this again.\n\n' +
-      'Easier: use Outreach -> Upload a lead file (CSV).');
-  }
-  var chk = checkLeadRows_(values);
-  if (!confirmMissing_(chk)) return;
-  var pick = askSender_(ss);
-  if (!pick.ok) return;
-  var res = importRows_(ss, values, 'Import tab ' + Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm'), pick.inbox);
-  if (res.imported > 0) sh.clearContents();
-  alert_(importSummary_(res) + gapsText_(chk));
-}
-
-function importFromLink() {
-  var ui = SpreadsheetApp.getUi();
-  var r = ui.prompt('Import leads',
-    'Paste a link to a Google Sheet, or to a CSV file in Google Drive.\n' +
-    '(Excel files: open them with Google Sheets first, then use that link.)',
-    ui.ButtonSet.OK_CANCEL);
-  if (r.getSelectedButton() !== ui.Button.OK) return;
-  var url = r.getResponseText().trim();
-  if (!url) return;
-  var ss = ss_();
-  var values, source;
-  try {
-    if (/\/spreadsheets\/d\//.test(url)) {
-      var got = readSheetLink_(SpreadsheetApp.openByUrl(url), url);
-      values = got.values; source = got.source;
-    } else {
-      var id = (url.match(/[-\w]{25,}/) || [])[0];
-      if (!id) return alert_('That does not look like a Google Drive link.');
-      var file = DriveApp.getFileById(id);
-      if (file.getMimeType() === MimeType.GOOGLE_SHEETS) {
-        var got2 = readSheetLink_(SpreadsheetApp.openById(id), url);
-        values = got2.values; source = got2.source;
-      } else {
-        values = leadRowsFromText_(file.getBlob().getDataAsString());
-        source = file.getName();
-      }
-    }
-  } catch (e) {
-    return alert_('Could not open that file: ' + e.message +
-      '\n\nMake sure the Gmail you are using now can open it.');
-  }
-  values = trimToHeader_(unsplitPasted_(values || []));
-  if (values.length < 2) return alert_('No rows found in that file.');
-  var chk = checkLeadRows_(values);
-  if (!confirmMissing_(chk)) return;
-  var pick = askSender_(ss);
-  if (!pick.ok) return;
-  alert_(importSummary_(importRows_(ss, values, source, pick.inbox)) + gapsText_(chk));
-}
-
-// ---------------------------------------------------------------- upload a lead file
+// ---------------------------------------------------------------- import: upload a lead file
 
 // Opens a small window: pick a CSV file (or paste the text), choose a Gmail, check, import.
 function showUploadDialog() {
@@ -522,7 +460,7 @@ var UPLOAD_HTML_ = [
   '  if (p.noEmail) h += "\\n" + p.noEmail + " rows have no email and will be skipped.";',
   '  if (p.sample) h += "\\n\\nFirst lead: " + esc(p.sample);',
   '  h += "</div>";',
-  '  if (p.missing.length) h += "<p class=bad>Missing columns: " + esc(p.missing.join(", ")) + ". Best fix: make the file again with the master prompt.</p><p><button class=btn onclick=go()>Import anyway</button></p>";',
+  '  if (p.missing.length) h += "<p class=bad>Missing columns: " + esc(p.missing.join(", ")) + ". Best fix: make the file again with the lead prompt (LEAD-PROMPT.txt).</p><p><button class=btn onclick=go()>Import anyway</button></p>";',
   '  else h += "<p><button class=btn onclick=go()>Import " + p.leads + " leads</button></p>";',
   '  show(h);',
   '}',
@@ -590,19 +528,6 @@ function leadRowsFromText_(text) {
   return padRows_(trimToHeader_(parseCsvText_(text)));
 }
 
-// CSV text pasted into the Import tab often lands in column A only. Split it properly.
-function unsplitPasted_(values) {
-  if (!values.length) return values;
-  var wide = values.some(function (r) {
-    return r.slice(1).some(function (c) { return String(c).trim() !== ''; });
-  });
-  if (wide) return values;
-  var text = values.map(function (r) { return String(r[0]); }).join('\n');
-  if (!/[,\t;]/.test(text.split('\n')[0]) && !/[,\t;]/.test(text)) return values;
-  var rows = padRows_(trimToHeader_(parseCsvText_(text)));
-  return rows.length >= 2 && rows[0].length > 1 ? rows : values;
-}
-
 var REQUIRED_COLS_ = [['email', 'Email'], ['first', 'First Name'], ['subject', 'Subject'],
                       ['message', 'Message'], ['fu1', 'Follow-up 1'], ['fu2', 'Follow-up 2']];
 
@@ -641,17 +566,6 @@ function checkLeadRows_(rows) {
   };
 }
 
-// Asks before importing a file that is missing required columns. True = go ahead.
-function confirmMissing_(chk) {
-  var ui = ui_();
-  if (!chk.missing.length || !ui) return true;
-  var r = ui.alert('Some columns are missing',
-    'This file has no ' + chk.missing.join(', ') + ' column.\n\n' +
-    'Best fix: make the file again with the master prompt (prompts/0-MASTER-PROMPT.txt).\n\n' +
-    'Import it anyway?', ui.ButtonSet.YES_NO);
-  return r === ui.Button.YES;
-}
-
 // Extra lines for the import summary about missing columns and empty cells.
 function gapsText_(chk) {
   var t = '';
@@ -661,14 +575,6 @@ function gapsText_(chk) {
       '. Fill them in on the Leads tab before those emails are due.';
   }
   return t;
-}
-
-function readSheetLink_(book, url) {
-  var gid = (url.match(/[#&?]gid=(\d+)/) || [])[1];
-  var tab = null;
-  if (gid) tab = book.getSheets().filter(function (s) { return String(s.getSheetId()) === gid; })[0];
-  tab = tab || book.getSheets()[0];
-  return { values: tab.getDataRange().getValues(), source: book.getName() + ' / ' + tab.getName() };
 }
 
 function importRows_(ss, values, source, sendFrom) {
@@ -802,27 +708,6 @@ function importSummary_(res) {
       'Connect your Gmails, then click "Spread waiting leads across inboxes".';
   }
   return msg;
-}
-
-// Asks which Gmail should send an import. Blank = spread evenly.
-function askSender_(ss) {
-  var ui = ui_();
-  if (!ui) return { ok: true, inbox: '' };
-  var list = allInboxes_(ss);
-  var r = ui.prompt('Which Gmail should send these leads?',
-    'Leave blank and click OK to spread them evenly across all active Gmails.\n\n' +
-    'Or type ONE Gmail address to send all of them from that Gmail.' +
-    (list.length ? '\n\nYour Gmails:\n' + list.slice(0, 30).join('\n') : '') +
-    '\n\n(A "Send From" column in your file overrides this for each row.)',
-    ui.ButtonSet.OK_CANCEL);
-  if (r.getSelectedButton() !== ui.Button.OK) return { ok: false };
-  var pick = normEmail_(r.getResponseText());
-  if (!pick) return { ok: true, inbox: '' };
-  if (list.indexOf(pick) < 0) {
-    alert_(pick + ' is not on the Inboxes tab. Connect that Gmail first, or leave the box blank. Nothing was imported.');
-    return { ok: false };
-  }
-  return { ok: true, inbox: pick };
 }
 
 function rebalanceLeads() {
