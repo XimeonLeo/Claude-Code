@@ -30,7 +30,7 @@ var SENDER_NAME = '';    // e.g. 'Sarah Jones'
 // ---------------------------------------------------------------- admins
 // Only these Gmails can use "Outreach -> Admin: watch team sheets".
 // Fill this in BEFORE you give Code.gs to your team. Separate several with commas.
-var ADMINS = '';         // e.g. 'you@gmail.com, partner@gmail.com'
+var ADMINS = 'simeono.automation@gmail.com'; // add more with commas, e.g. 'you@gmail.com, partner@gmail.com'
 
 // ---------------------------------------------------------------- constants
 
