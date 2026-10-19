@@ -142,6 +142,41 @@ Then set the **Outcome** (Interested, Meeting booked, Not interested).
 **File → Make a copy** of the master sheet. In the copy, clear the Leads and Log
 tabs (keep the header rows), update Settings, and connect the new Gmails (Part 2).
 
+## Admin: watch your team's sheets
+
+If you've set this system up for other people, you can watch all their sheets from your own master sheet.
+
+**Each team member (once):** in their master sheet click **Share** → add your Gmail → **Viewer** → Send.
+They must also have the latest `Code.gs` and have clicked **Set up / repair**.
+
+**You (once):**
+1. Paste the latest `Code.gs` into your own master sheet's script and reload.
+2. **📧 Outreach → Admin: watch team sheets → Add a team member's sheet.** Type their name, paste their sheet link.
+   Repeat for each person. (Or type names in column A and links in column B of the **Team** tab.)
+3. **📧 Outreach → Admin: watch team sheets → Turn on automatic checks (every 2 hours).**
+
+You get three new tabs:
+
+| Tab | What it shows |
+|---|---|
+| **Team** | One row per person: 🟢 OK / 🟡 Check / 🔴 Problem, what's wrong now, sent today, last 7 days, total, bounce %, replies, meetings, leads waiting, active Gmails, last email sent, and a link to open their dashboard |
+| **Team Alerts** | Every problem found, with the date and time and how to check it. It's kept even after they fix it |
+| **Team History** | Their numbers at every check, so you can see progress over time |
+
+The numbers are worked out from their raw Leads and Log tabs, not their Dashboard, so editing the Dashboard doesn't hide anything.
+The history is stored in **your** sheet, so they can't change it.
+
+**What gets flagged:**
+- 🔴 Leads, Log rows or Do Not Contact rows deleted. Total sent going down. A tab, column or Settings row deleted or renamed.
+- 🔴 The Leads tab and the Log don't agree (one of them was edited or cleared).
+- 🔴 You can't open their sheet any more (they removed your access).
+- 🟡 Daily limit above 35, warm-up off, opt-out line removed, follow-ups off, sending paused.
+- 🟡 Leads set back to New after being emailed, leads marked Replied by hand, duplicate leads.
+- 🟡 High bounce rate, Gmails paused, nothing sent in 24 hours, no leads waiting.
+
+**To see exactly what someone changed:** open their sheet → **File → Version history → See version history**.
+It shows who edited what and when, and you can restore an earlier version.
+
 ## Troubleshooting
 
 | Problem | Fix |
@@ -153,5 +188,7 @@ tabs (keep the header rows), update Settings, and connect the new Gmails (Part 2
 | Wrong Gmail connected | Use an Incognito window with only that Gmail signed in |
 | "Missing columns" on upload | Make the file again with `LEAD-PROMPT.txt` |
 | Excel file won't upload | Open it in Google Sheets → File → Download → CSV, then upload that |
+| Team tab: "Cannot open this sheet" | They haven't shared it with you, removed your access, or the link is wrong |
+| Team tab: "columns/rows deleted or renamed" right after adding someone | Their script is older. Have them paste the latest Code.gs and click Set up / repair |
 | `#VALUE!` on Dashboard | The Goal in Settings must be a plain number, e.g. 5000 |
 | Leads with no Gmail | Connect your Gmails, then "Spread waiting leads across inboxes" |

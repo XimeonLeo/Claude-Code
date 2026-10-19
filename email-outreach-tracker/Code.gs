@@ -119,6 +119,12 @@ function onOpen() {
     .addItem('Check replies & bounces now', 'checkNow')
     .addSeparator()
     .addItem('Which Gmail am I using?', 'whoAmI')
+    .addSeparator()
+    .addSubMenu(SpreadsheetApp.getUi().createMenu('Admin: watch team sheets')
+      .addItem('Add a team member\'s sheet', 'addTeamSheet')
+      .addItem('Check all team sheets now', 'refreshTeam')
+      .addItem('Turn on automatic checks (every 2 hours)', 'teamAutoOn')
+      .addItem('Turn off automatic checks', 'teamAutoOff'))
     .addToUi();
 }
 
@@ -1178,6 +1184,321 @@ function encodeHeader_(s) {
 
 // ---------------------------------------------------------------- sheet helpers
 
+
+// ---------------------------------------------------------------- admin: watch team sheets
+// For the admin's own master sheet. Each team member shares their master sheet with the
+// admin (Viewer is enough). The admin pastes the links into the Team tab. The script reads
+// their raw data (not their Dashboard), compares it with the last check, and flags changes.
+// The history lives in the admin's sheet, so team members cannot change it.
+
+var TEAM = { OVERVIEW: 'Team', ALERTS: 'Team Alerts', HISTORY: 'Team History' };
+var TEAM_HEADERS = ['Name', 'Sheet link', 'Status', 'Problems now', 'Red alerts (7 days)',
+  'Sent today', 'Sent (7 days)', 'Total sent', 'Bounce %', 'Replies', 'Reply %', 'Meetings',
+  'Leads waiting', 'Active Gmails', 'Last email sent', 'Last checked', 'Their dashboard'];
+var TEAM_ALERT_HEADERS = ['Found At', 'Name', 'Level', 'What happened', 'How to check', 'Sheet ID'];
+var TEAM_HISTORY_HEADERS = ['Checked At', 'Name', 'Leads', 'Waiting', 'Total Sent', 'Log Rows',
+  'Log Sends', 'Replies', 'Bounced', 'Do Not Contact', 'Status', 'Sheet ID', 'Snapshot'];
+var HOW_VERSION = 'Open their sheet -> File -> Version history -> See version history. It shows who changed what, and you can restore it.';
+var HOW_REPAIR = 'If they have an older copy of the script, paste the latest Code.gs and click Set up / repair. Otherwise: ' + HOW_VERSION;
+
+function addTeamSheet() {
+  var ui = SpreadsheetApp.getUi();
+  var ss = ss_();
+  teamSetup_(ss);
+  var a = ui.prompt('Add a team member', 'Their name (e.g. "Sarah"):', ui.ButtonSet.OK_CANCEL);
+  if (a.getSelectedButton() !== ui.Button.OK || !a.getResponseText().trim()) return;
+  var b = ui.prompt('Add ' + a.getResponseText().trim(),
+    'Paste the link to THEIR master sheet.\n\nThey must share it with you first (Share -> add your Gmail -> Viewer).',
+    ui.ButtonSet.OK_CANCEL);
+  if (b.getSelectedButton() !== ui.Button.OK || !b.getResponseText().trim()) return;
+  var sh = ss.getSheetByName(TEAM.OVERVIEW);
+  sh.getRange(lastFilledRow_(sh, 2) + 1, 1, 1, 2).setValues([[a.getResponseText().trim(), b.getResponseText().trim()]]);
+  alert_(refreshTeam_());
+}
+
+function refreshTeam() { alert_(refreshTeam_()); }
+function refreshTeamAuto() { refreshTeam_(); }
+
+function teamAutoOn() {
+  teamAutoOff_();
+  ScriptApp.newTrigger('refreshTeamAuto').timeBased().everyHours(2).create();
+  alert_('Automatic checks are on. Every 2 hours the Team tab is updated and any changes are written to Team Alerts.');
+}
+function teamAutoOff() { teamAutoOff_(); alert_('Automatic checks are off.'); }
+function teamAutoOff_() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'refreshTeamAuto') ScriptApp.deleteTrigger(t);
+  });
+}
+
+function teamSetup_(ss) {
+  var sh = ensureSheet_(ss, TEAM.OVERVIEW, TEAM_HEADERS);
+  if (sh.getRange(1, 1).getNote() === '') {
+    sh.getRange(1, 1).setNote('Type each team member\'s name in column A and the link to their master sheet in column B. ' +
+      'Then click Outreach -> Admin -> Check all team sheets now. They must share their sheet with you (Viewer).');
+    sh.getRange('A:B').setBackground('#fff8e1');
+    sh.getRange(1, 1, 1, 2).setBackground('#ffe082');
+    sh.setColumnWidth(2, 220);
+    sh.setColumnWidth(4, 380);
+    sh.getRange('D:D').setWrap(true);
+    sh.setFrozenColumns(1);
+  }
+  ensureSheet_(ss, TEAM.ALERTS, TEAM_ALERT_HEADERS).setColumnWidth(4, 420);
+  ensureSheet_(ss, TEAM.HISTORY, TEAM_HISTORY_HEADERS);
+}
+
+function refreshTeam_() {
+  var ss = ss_();
+  teamSetup_(ss);
+  var sh = ss.getSheetByName(TEAM.OVERVIEW);
+  var tc = colMap_(sh);
+  var n = lastFilledRow_(sh, 2);
+  if (n < 2) return 'Add a team member first: type their name in column A of the Team tab and the link to their sheet in column B.';
+  var width = sh.getLastColumn();
+  var rows = sh.getRange(2, 1, n - 1, width).getValues();
+  var hist = ss.getSheetByName(TEAM.HISTORY);
+  var alertsSh = ss.getSheetByName(TEAM.ALERTS);
+  var prevMap = lastTeamSnapshots_(hist);
+  var now = new Date();
+  var todayStart = startOfToday_(ss);
+  var histRows = [], alertRows = [];
+  var counts = { ok: 0, check: 0, problem: 0 };
+
+  rows.forEach(function (r) {
+    var name = String(r[tc['Name']]).trim();
+    var link = String(r[tc['Sheet link']]).trim();
+    if (!link) return;
+    var id = (link.match(/[-\w]{25,}/) || [])[0] || link;
+    var prev = prevMap[id] || null;
+    var res, dash = '';
+    try {
+      var book = SpreadsheetApp.openById(id);
+      res = analyzeTeam_(readTeamData_(book), prev, now, todayStart);
+      var d = book.getSheetByName(SHEET.DASH);
+      dash = '=HYPERLINK("' + book.getUrl() + (d ? '#gid=' + d.getSheetId() : '') + '","Open")';
+    } catch (e) {
+      res = { stats: null, snapshot: prev, flags: [{ level: 'red', key: 'access',
+        text: 'Cannot open this sheet: access was removed or the link is wrong.',
+        how: 'Ask them to share their master sheet with you again (Viewer).' }] };
+    }
+    var known = (prev && prev.flags) || [];
+    res.flags.forEach(function (f) {
+      if (known.indexOf(f.key) < 0) alertRows.push([now, name, f.level === 'red' ? '🔴 Red' : '🟡 Check', f.text, f.how || '', id]);
+    });
+    var status = teamStatus_(res.flags);
+    counts[status === '🟢 OK' ? 'ok' : status === '🟡 Check' ? 'check' : 'problem']++;
+    var set = function (h, v) { if (tc[h] !== undefined) r[tc[h]] = v; };
+    set('Status', status);
+    set('Problems now', res.flags.map(function (f) { return (f.level === 'red' ? '🔴 ' : '🟡 ') + f.text; }).join('\n') || 'None');
+    set('Last checked', now);
+    if (res.stats) {
+      var t = res.stats;
+      set('Sent today', t.sentToday); set('Sent (7 days)', t.sent7); set('Total sent', t.totalSent);
+      set('Bounce %', t.bouncePct); set('Replies', t.replies); set('Reply %', t.replyPct);
+      set('Meetings', t.meetings); set('Leads waiting', t.waiting);
+      set('Active Gmails', t.activeInboxes + ' of ' + t.inboxes);
+      set('Last email sent', t.lastSent || 'Never');
+      set('Their dashboard', dash);
+      var snap = res.snapshot;
+      snap.flags = res.flags.map(function (f) { return f.key; });
+      histRows.push([now, name, snap.leads, snap.waiting, snap.totalSent, snap.logRows, snap.logSends,
+        snap.replies, snap.bounced, snap.dnc, status, id, JSON.stringify(snap)]);
+    } else {
+      var keep = prev ? JSON.parse(JSON.stringify(prev)) :
+        { leads: 0, waiting: 0, totalSent: 0, logRows: 0, logSends: 0, replies: 0, bounced: 0, dnc: 0 };
+      keep.flags = res.flags.map(function (f) { return f.key; });
+      histRows.push([now, name, keep.leads, keep.waiting, keep.totalSent, keep.logRows, keep.logSends,
+        keep.replies, keep.bounced, keep.dnc, status, id, JSON.stringify(keep)]);
+    }
+    r.__id = id;
+  });
+
+  if (alertRows.length) alertsSh.getRange(alertsSh.getLastRow() + 1, 1, alertRows.length, alertRows[0].length).setValues(alertRows);
+  if (histRows.length) hist.getRange(hist.getLastRow() + 1, 1, histRows.length, histRows[0].length).setValues(histRows);
+
+  // red alerts in the last 7 days, per sheet
+  var reds = {};
+  if (alertsSh.getLastRow() > 1) {
+    var ac = colMap_(alertsSh);
+    alertsSh.getRange(2, 1, alertsSh.getLastRow() - 1, alertsSh.getLastColumn()).getValues().forEach(function (a) {
+      var at = a[ac['Found At']];
+      if (at instanceof Date && now - at < 7 * 86400000 && String(a[ac['Level']]).indexOf('Red') >= 0) {
+        reds[a[ac['Sheet ID']]] = (reds[a[ac['Sheet ID']]] || 0) + 1;
+      }
+    });
+  }
+  rows.forEach(function (r) { if (r.__id && tc['Red alerts (7 days)'] !== undefined) r[tc['Red alerts (7 days)']] = reds[r.__id] || 0; });
+
+  sh.getRange(2, 1, rows.length, width).setValues(rows.map(function (r) { return r.slice(0, width); }));
+  sh.getRange(2, tc['Bounce %'] + 1, rows.length, 1).setNumberFormat('0.0%');
+  sh.getRange(2, tc['Reply %'] + 1, rows.length, 1).setNumberFormat('0.0%');
+  sh.getRange(2, tc['Last email sent'] + 1, rows.length, 2).setNumberFormat('yyyy-mm-dd hh:mm');
+  return 'Checked ' + (counts.ok + counts.check + counts.problem) + ' team sheets: ' +
+    counts.ok + ' OK, ' + counts.check + ' to check, ' + counts.problem + ' with problems.\n\n' +
+    (alertRows.length ? alertRows.length + ' new alerts were added to the Team Alerts tab.' : 'No new alerts.');
+}
+
+function teamStatus_(flags) {
+  if (flags.some(function (f) { return f.level === 'red'; })) return '🔴 Problem';
+  return flags.length ? '🟡 Check' : '🟢 OK';
+}
+
+// The most recent snapshot for each sheet, from the Team History tab.
+function lastTeamSnapshots_(hist) {
+  var map = {};
+  if (hist.getLastRow() < 2) return map;
+  var hc = colMap_(hist);
+  hist.getRange(2, 1, hist.getLastRow() - 1, hist.getLastColumn()).getValues().forEach(function (r) {
+    try { map[r[hc['Sheet ID']]] = JSON.parse(r[hc['Snapshot']]); } catch (e) { /* skip */ }
+  });
+  return map;
+}
+
+function readTeamData_(book) {
+  var get = function (name) { var sh = book.getSheetByName(name); return sh ? sh.getDataRange().getValues() : null; };
+  return { leads: get(SHEET.LEADS), log: get(SHEET.LOG), inboxes: get(SHEET.INBOXES),
+           settings: get(SHEET.SETTINGS), dnc: get(SHEET.DNC), dashboard: !!book.getSheetByName(SHEET.DASH) };
+}
+
+// Works out a team member's numbers from their raw tabs and flags anything that looks changed.
+// d: the tab values, prev: the last snapshot (or null), now / todayStart: Dates.
+function analyzeTeam_(d, prev, now, todayStart) {
+  var flags = [];
+  var add = function (level, key, text, how) { flags.push({ level: level, key: key, text: text, how: how || '' }); };
+  var idx = function (header) { var m = {}; (header || []).forEach(function (h, i) { if (h !== '') m[String(h)] = i; }); return m; };
+  var day = 86400000;
+
+  var missingTabs = [['leads', SHEET.LEADS], ['log', SHEET.LOG], ['inboxes', SHEET.INBOXES],
+    ['settings', SHEET.SETTINGS], ['dnc', SHEET.DNC], ['dashboard', SHEET.DASH]]
+    .filter(function (t) { return !d[t[0]]; }).map(function (t) { return t[1]; });
+  if (missingTabs.length) add('red', 'tabs', 'Tab deleted or renamed: ' + missingTabs.join(', '), HOW_VERSION);
+
+  // Leads
+  var leads = d.leads || [[]];
+  var lh = idx(leads[0]);
+  if (d.leads) {
+    var missingCols = LEAD_HEADERS.filter(function (h) { return lh[h] === undefined; });
+    if (missingCols.length) add('red', 'cols', 'Leads columns deleted or renamed: ' + missingCols.join(', '), HOW_REPAIR);
+  }
+  var s = { leads: 0, waiting: 0, totalSent: 0, emailed: 0, replies: 0, bounced: 0, meetings: 0,
+            resetToNew: 0, handReplied: 0, dupes: 0 };
+  var seen = {};
+  for (var r = 1; r < leads.length; r++) {
+    var row = leads[r];
+    var email = normEmail_(row[lh['Email']]);
+    if (!email) continue;
+    s.leads++;
+    if (seen[email]) s.dupes++;
+    seen[email] = true;
+    var status = String(row[lh['Status']] || '').trim();
+    var sent = Number(row[lh['Emails Sent']]) || 0;
+    s.totalSent += sent;
+    if (sent > 0) s.emailed++;
+    if (status === STATUS.NEW) {
+      s.waiting++;
+      if (sent > 0 || row[lh['Email 1 Sent']]) s.resetToNew++;
+    }
+    var repliedAt = row[lh['Replied At']];
+    if (status === STATUS.REPLIED || repliedAt) s.replies++;
+    if (status === STATUS.REPLIED && !repliedAt) s.handReplied++;
+    if (status === STATUS.BOUNCED) s.bounced++;
+    var oc = String(row[lh['Outcome']] || '');
+    if (oc === 'Meeting booked' || oc === 'Customer') s.meetings++;
+  }
+
+  // Log
+  var log = d.log || [[]];
+  var gh = idx(log[0]);
+  var logRows = 0, logSends = 0, sentToday = 0, sent7 = 0, lastSent = null;
+  for (var i = 1; i < log.length; i++) {
+    var ev = String(log[i][gh['Event']] || '');
+    var ts = log[i][gh['Timestamp']];
+    if (!ev && !ts) continue;
+    logRows++;
+    if (SENT_EVENTS.indexOf(ev) < 0) continue;
+    logSends++;
+    if (ts instanceof Date) {
+      if (ts >= todayStart) sentToday++;
+      if (now - ts < 7 * day) sent7++;
+      if (!lastSent || ts > lastSent) lastSent = ts;
+    }
+  }
+
+  // Inboxes
+  var ibv = d.inboxes || [[]];
+  var ih = idx(ibv[0]);
+  var inboxes = 0, active = 0, redHealth = 0;
+  for (var j = 1; j < ibv.length; j++) {
+    if (!isValidEmail_(normEmail_(ibv[j][ih['Inbox Email']]))) continue;
+    inboxes++;
+    if (String(ibv[j][ih['Status']]).trim() === 'Active') active++;
+    if (String(ibv[j][ih['Health']] || '').indexOf('🔴') >= 0) redHealth++;
+  }
+
+  // Do Not Contact
+  var dnc = (d.dnc || [[]]).slice(1).filter(function (x) { return String(x[0]).trim() !== ''; }).length;
+
+  // Settings
+  var st = settingsFromValues_(d.settings || []);
+  if (d.settings) {
+    var labels = {};
+    d.settings.forEach(function (x) { labels[String(x[0]).trim()] = true; });
+    var gone = SETTINGS_DEF.filter(function (x) { return !labels[x.label]; }).map(function (x) { return x.label; });
+    if (gone.length) add('red', 'settingsRows', 'Settings rows deleted or renamed: ' + gone.join(', '), HOW_REPAIR);
+    if (st.dailyLimit > 35) add('yellow', 'limit', 'Daily limit raised to ' + st.dailyLimit + ' (max 35 for free Gmail)', 'Their Settings tab.');
+    if (!st.rampStart) add('yellow', 'warmup', 'Warm-up turned off', 'Their Settings tab.');
+    if (st.paused) add('yellow', 'paused', 'Sending is paused (Pause everything = TRUE)', 'Their Settings tab.');
+    if (!st.optOut) add('yellow', 'optout', 'Opt-out line removed', 'Their Settings tab.');
+    if (st.followUps === 0) add('yellow', 'nofu', 'Follow-ups turned off', 'Their Settings tab.');
+  }
+
+  // Changes since the last check
+  if (prev) {
+    if (s.leads < prev.leads) add('red', 'leadsDown:' + prev.leads + '>' + s.leads,
+      (prev.leads - s.leads) + ' leads deleted since the last check (' + prev.leads + ' -> ' + s.leads + '). Expected only if they started a new campaign.', HOW_VERSION);
+    if (logRows < prev.logRows) add('red', 'logDown:' + prev.logRows + '>' + logRows,
+      (prev.logRows - logRows) + ' Log rows deleted since the last check', HOW_VERSION);
+    if (s.totalSent < prev.totalSent) add('red', 'sentDown:' + prev.totalSent + '>' + s.totalSent,
+      'Total sent went DOWN by ' + (prev.totalSent - s.totalSent) + ' (sent numbers edited, or emailed leads deleted)', HOW_VERSION);
+    if (dnc < prev.dnc) add('red', 'dncDown:' + prev.dnc + '>' + dnc,
+      (prev.dnc - dnc) + ' people removed from Do Not Contact (they could be emailed again)', HOW_VERSION);
+  }
+
+  // Leads and Log must agree
+  var tol = Math.max(3, Math.round(0.02 * Math.max(logSends, s.totalSent)));
+  if (d.leads && d.log) {
+    if (logSends < s.totalSent - tol) add('red', 'logMissing',
+      'The Log has ' + (s.totalSent - logSends) + ' fewer sends than the Leads tab: Log rows were deleted', HOW_VERSION);
+    if (s.totalSent < logSends - tol) add('red', 'leadsMissing',
+      'The Leads tab has ' + (logSends - s.totalSent) + ' fewer sends than the Log: emailed leads were deleted or reset', HOW_VERSION);
+  }
+  if (s.resetToNew) add('yellow', 'reset', s.resetToNew + ' leads were set back to New after being emailed (they will be emailed again)', 'Their Leads tab: filter Status = New, look at Emails Sent.');
+  if (s.handReplied) add('yellow', 'handReplied', s.handReplied + ' leads marked Replied by hand (no reply was found by the system)', 'Their Leads tab: Status = Replied with an empty Replied At.');
+  if (s.dupes) add('yellow', 'dupes', s.dupes + ' duplicate emails in Leads (added by hand)', 'Their Leads tab: sort by Email.');
+
+  // Activity
+  var bouncePct = s.emailed ? s.bounced / s.emailed : 0;
+  if (bouncePct > 0.03 && s.emailed >= 20) add('yellow', 'bounces', 'Bounce rate ' + (bouncePct * 100).toFixed(1) + '% (keep under 2%): lists not checked before upload?', 'Their Leads tab: filter Status = Bounced.');
+  if (d.inboxes && inboxes === 0) add('yellow', 'noInbox', 'No Gmail connected yet', 'Their Inboxes tab.');
+  else if (d.inboxes && active === 0) add('yellow', 'noActive', 'All Gmails are paused', 'Their Inboxes tab: Status column.');
+  if (redHealth) add('yellow', 'health', redHealth + ' Gmail(s) paused for too many bounces', 'Their Inboxes tab: Health column.');
+  var weekend = [0, 6].indexOf(now.getDay()) >= 0;
+  if (!st.paused && active > 0 && s.waiting > 0 && !(weekend && !st.weekends) &&
+      (!lastSent || now - lastSent > 26 * 3600000)) {
+    add('yellow', 'idle', 'Nothing sent in the last 24 hours, but ' + s.waiting + ' leads are waiting', 'Their Inboxes tab: read Last Result.');
+  }
+  if (d.leads && s.waiting === 0 && s.leads > 0 && !st.paused) add('yellow', 'empty', 'No leads waiting: they need to upload more', '');
+
+  return {
+    flags: flags,
+    stats: { sentToday: sentToday, sent7: sent7, totalSent: s.totalSent, bouncePct: bouncePct,
+             replies: s.replies, replyPct: s.emailed ? s.replies / s.emailed : 0, meetings: s.meetings,
+             waiting: s.waiting, activeInboxes: active, inboxes: inboxes, lastSent: lastSent },
+    snapshot: { leads: s.leads, waiting: s.waiting, totalSent: s.totalSent, logRows: logRows,
+                logSends: logSends, replies: s.replies, bounced: s.bounced, dnc: dnc }
+  };
+}
+
 function ss_() {
   if (MASTER_SHEET) {
     var id = (String(MASTER_SHEET).match(/[-\w]{25,}/) || [])[0];
@@ -1252,8 +1573,13 @@ function log_(ss, inbox, leadEmail, event, leadId, detail, threadId, msgId) {
 function readSettings_(ss) {
   var sh = ss.getSheetByName(SHEET.SETTINGS);
   if (!sh) throw new Error('Settings tab missing. Run Outreach -> 1. Set up this sheet.');
+  return settingsFromValues_(sh.getRange(1, 1, sh.getLastRow(), 2).getValues());
+}
+
+// Reads settings from the Settings tab's rows (label in column A, value in column B).
+function settingsFromValues_(values) {
   var byLabel = {};
-  sh.getRange(1, 1, sh.getLastRow(), 2).getValues().forEach(function (r) { byLabel[String(r[0]).trim()] = r[1]; });
+  values.forEach(function (r) { byLabel[String(r[0]).trim()] = r[1]; });
   var s = {};
   SETTINGS_DEF.forEach(function (d) {
     s[d.key] = byLabel.hasOwnProperty(d.label) ? byLabel[d.label] : (d.value === 'TODAY' ? new Date() : d.value);
