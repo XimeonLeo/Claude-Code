@@ -85,6 +85,9 @@ if a column is missing. If it says columns are missing, make the file again with
 
 ---
 
+**Never change row 1** (the column names) of Leads, Inboxes, Log or Do Not Contact. Don't rename, delete or move
+columns, and when you sort, use **Data → Sort range** with **"Data has header row"** ticked. The script finds everything by those names.
+
 ## The tabs
 
 | Tab | What it shows | Can I type in it? |
@@ -208,5 +211,7 @@ It shows who edited what and when, and you can restore an earlier version.
 | Excel file won't upload | Open it in Google Sheets → File → Download → CSV, then upload that |
 | Team tab: "Cannot open this sheet" | They haven't shared it with you, removed your access, or the link is wrong |
 | Team tab: "columns/rows deleted or renamed" right after adding someone | Their script is older. Have them paste the latest Code.gs and click Set up / repair |
+| Leads or data look missing after Set up / repair | Nothing is deleted: row 1 (the column names) had been changed, so the old script added new empty columns. **File → Version history → See version history** → pick a version from before the repair → **Restore this version**. Then paste the latest Code.gs and run Set up / repair again |
+| "Nothing was changed. Set up / repair stopped..." | Row 1 of a tab was sorted, renamed or deleted. Do what the message says (Version history is easiest), then run Set up / repair again |
 | `#VALUE!` on Dashboard | The Goal in Settings must be a plain number, e.g. 5000 |
 | Leads with no Gmail | Connect your Gmails, then "Spread waiting leads across inboxes" |

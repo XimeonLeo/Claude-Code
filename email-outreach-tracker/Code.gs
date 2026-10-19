@@ -137,6 +137,9 @@ function onOpen() {
 
 function setupSheet() {
   var ss = ss_();
+  // Check the header rows first. If they look wrong, stop before changing anything.
+  var problem = headerProblems_(ss);
+  if (problem) return alert_(problem);
   PropertiesService.getScriptProperties().setProperty('SSID', ss.getId());
 
   // Settings
@@ -159,17 +162,20 @@ function setupSheet() {
   st.getRange('B:B').setWrap(true);
   st.getRange('A:A').setFontWeight('bold');
 
-  // Inboxes
+  // Inboxes (formulas are written after the Leads tab exists)
+  ensureSheet_(ss, SHEET.LEADS, LEAD_HEADERS);
   var ib = ensureSheet_(ss, SHEET.INBOXES, INBOX_HEADERS);
   writeInboxFormulas_(ib);
-  ib.getRange(2, 4, INBOX_FORMULA_ROWS, 1).setDataValidation(
+  var icm = colMap_(ib);
+  ib.getRange(2, icm['Status'] + 1, INBOX_FORMULA_ROWS, 1).setDataValidation(
     SpreadsheetApp.newDataValidation()
       .requireValueInList(['Active', 'Paused', 'Paused - bounces'], true)
       .setAllowInvalid(true).build());
-  ib.getRange(2, 6, INBOX_FORMULA_ROWS, 1).setNumberFormat('yyyy-mm-dd hh:mm');
-  ib.getRange(2, 10, INBOX_FORMULA_ROWS, 1).setNumberFormat('0.0%');
-  ib.getRange(2, 12, INBOX_FORMULA_ROWS, 1).setNumberFormat('0.0%');
-  ib.setColumnWidth(1, 240); ib.setColumnWidth(2, 180); ib.setColumnWidth(INBOX_HEADERS.length, 420);
+  ib.getRange(2, icm['Last Run'] + 1, INBOX_FORMULA_ROWS, 1).setNumberFormat('yyyy-mm-dd hh:mm');
+  ib.getRange(2, icm['Bounce %'] + 1, INBOX_FORMULA_ROWS, 1).setNumberFormat('0.0%');
+  ib.getRange(2, icm['Reply %'] + 1, INBOX_FORMULA_ROWS, 1).setNumberFormat('0.0%');
+  ib.setColumnWidth(icm['Inbox Email'] + 1, 240); ib.setColumnWidth(icm['Sender Name'] + 1, 180);
+  ib.setColumnWidth(icm['Last Result'] + 1, 420);
 
   // Leads
   var ld = ensureSheet_(ss, SHEET.LEADS, LEAD_HEADERS);
@@ -221,6 +227,97 @@ function setupSheet() {
   toast_('Sheet is ready. Next: check Settings, connect your Gmails, then import leads.');
 }
 
+// Columns that newer versions of the script add. Anything else missing from a header row
+// means someone renamed, deleted or moved a column, so repair must not guess.
+var ADDED_LATER = {
+  'Leads': ['Message', 'Follow-up 1 Message', 'Follow-up 2 Message', 'Variant'],
+  'Inboxes': ['Last Result']
+};
+
+// Returns a message explaining what is wrong with the header rows, or '' if all is fine.
+// Headers that only differ in capitals or spaces are fixed on the spot.
+function headerProblems_(ss) {
+  var tabs = [[SHEET.LEADS, LEAD_HEADERS], [SHEET.INBOXES, INBOX_HEADERS],
+              [SHEET.LOG, LOG_HEADERS], [SHEET.DNC, DNC_HEADERS]];
+  var problems = [];
+  tabs.forEach(function (t) {
+    var sh = ss.getSheetByName(t[0]);
+    if (!sh || sh.getLastRow() === 0) return;
+    var width = sh.getLastColumn();
+    var rowsToScan = Math.min(sh.getLastRow(), 60);
+    var grid = sh.getRange(1, 1, rowsToScan, width).getValues();
+    var found = headerFixes_(grid[0], t[1], ADDED_LATER[t[0]] || []);
+    found.fixes.forEach(function (f) { sh.getRange(1, f.col + 1).setValue(f.to); });
+    if (found.fixes.length) grid[0] = sh.getRange(1, 1, 1, width).getValues()[0];
+    var msg = headerVerdict_(t[0], grid, t[1], found);
+    if (msg) problems.push(msg);
+  });
+  if (!problems.length) return '';
+  return 'Nothing was changed. Set up / repair stopped because some column names are not where they should be:\n\n' +
+    problems.join('\n\n') +
+    '\n\nHOW TO FIX IT (easiest): File -> Version history -> See version history. Click a version from before ' +
+    'the problem, check your leads are there, then click "Restore this version". Then run Set up / repair again.' +
+    '\n\nOr fix row 1 by hand so the column names match exactly, then run Set up / repair again.';
+}
+
+// Which expected headers are missing, duplicated, or only differ in capitals/spaces.
+function headerFixes_(row, expected, addedLater) {
+  var have = row.map(function (h) { return String(h).trim(); });
+  var fixes = [], missing = [], dupes = [];
+  expected.forEach(function (h) {
+    var exact = have.filter(function (x) { return x === h; }).length;
+    if (exact > 1) dupes.push(h);
+    if (exact) return;
+    var loose = have.map(normHeader_).indexOf(normHeader_(h));
+    if (loose >= 0 && have[loose] !== '' && expected.indexOf(have[loose]) < 0) {
+      fixes.push({ col: loose, to: h });
+      have[loose] = h;
+    } else if (addedLater.indexOf(h) < 0) {
+      missing.push(h);
+    }
+  });
+  return { fixes: fixes, missing: missing, dupes: dupes };
+}
+
+function headerVerdict_(tab, grid, expected, found) {
+  var count = function (row) {
+    var r = row.map(function (x) { return String(x).trim(); });
+    return expected.filter(function (h) { return r.indexOf(h) >= 0; }).length;
+  };
+  for (var i = 1; i < grid.length; i++) {
+    if (count(grid[i]) >= Math.ceil(expected.length / 2)) {
+      return '- ' + tab + ': the column names are also in row ' + (i + 1) + '. The tab was probably sorted ' +
+        'with the header row included, or an earlier repair added a second set of columns.';
+    }
+  }
+  if (count(grid[0]) < Math.ceil(expected.length / 2)) {
+    return '- ' + tab + ': row 1 does not have the column names (row deleted, moved or typed over).';
+  }
+  if (found.dupes.length) {
+    return '- ' + tab + ': these columns appear twice: ' + found.dupes.join(', ') +
+      '. An earlier repair probably added new empty copies at the far right.';
+  }
+  if (found.missing.length) {
+    return '- ' + tab + ': these columns are missing or renamed: ' + found.missing.join(', ') + '.';
+  }
+  if (tab === SHEET.LEADS && grid.length > 1) {
+    var e = grid[0].map(function (x) { return String(x).trim(); }).indexOf('Email');
+    var under = 0, elsewhere = -1;
+    for (var r = 1; r < grid.length; r++) {
+      if (isValidEmail_(normEmail_(grid[r][e]))) under++;
+      for (var c = 0; c < grid[r].length && elsewhere < 0; c++) {
+        if (c !== e && isValidEmail_(normEmail_(grid[r][c])) && String(grid[r][c]).indexOf('@') > 0 &&
+            String(grid[0][c]).trim() !== 'Assigned Inbox') elsewhere = c;
+      }
+    }
+    if (!under && elsewhere >= 0) {
+      return '- Leads: the Email column is empty, but there are emails in column ' + colLetter_(elsewhere + 1) +
+        '. The columns have moved out of place.';
+    }
+  }
+  return '';
+}
+
 function ensureSheet_(ss, name, headers) {
   var sh = ss.getSheetByName(name);
   if (!sh) sh = ss.insertSheet(name);
@@ -245,27 +342,46 @@ function ensureSheet_(ss, name, headers) {
   return sh;
 }
 
+// Fills the formula columns of the Inboxes tab, finding each column (and the Leads
+// columns it counts) by name, so inserted or moved columns are never overwritten.
 function writeInboxFormulas_(ib) {
-  var rows = Math.max(INBOX_FORMULA_ROWS, lastFilledRow_(ib, 1) + 10);
-  var f = [];
-  for (var r = 2; r <= rows + 1; r++) {
-    var a = '$A' + r;
-    var sentAll = 'COUNTIFS(Log!$B:$B,' + a + ',Log!$D:$D,"SENT*")';
-    var first = 'COUNTIFS(Log!$B:$B,' + a + ',Log!$D:$D,"SENT_1")';
-    f.push([
-      '=IF(' + a + '="","",COUNTIFS(Log!$B:$B,' + a + ',Log!$D:$D,"SENT*",Log!$A:$A,">="&TODAY()))',
-      '=IF(' + a + '="","",' + sentAll + ')',
-      '=IF(' + a + '="","",COUNTIFS(Log!$B:$B,' + a + ',Log!$D:$D,"BOUNCE"))',
-      '=IF(' + a + '="","",IFERROR(I' + r + '/H' + r + ',0))',
-      '=IF(' + a + '="","",COUNTIFS(Log!$B:$B,' + a + ',Log!$D:$D,"REPLY")+COUNTIFS(Log!$B:$B,' + a + ',Log!$D:$D,"UNSUB"))',
-      '=IF(' + a + '="","",IFERROR(K' + r + '/' + first + ',0))',
-      '=IF(' + a + '="","",COUNTIF(Leads!$G:$G,' + a + '))',
-      '=IF(' + a + '="","",COUNTIFS(Leads!$G:$G,' + a + ',Leads!$F:$F,"New"))',
-      '=IF(' + a + '="","",IF(D' + r + '<>"Active","⏸ "&D' + r + ',IF(H' + r + '<10,"⚪ Too early to tell",' +
-        'IF(J' + r + '>=0.05,"🔴 High bounces",IF(J' + r + '>=0.02,"🟡 Watch","🟢 Healthy")))))'
-    ]);
-  }
-  ib.getRange(2, 7, f.length, f[0].length).setFormulas(f);
+  var ic = colMap_(ib);
+  var ss = ib.getParent();
+  var L = sheetLetters_(ss.getSheetByName(SHEET.LEADS));
+  var col = function (h) { return colLetter_(ic[h] + 1); };
+  var rows = Math.max(INBOX_FORMULA_ROWS, lastFilledRow_(ib, ic['Inbox Email'] + 1) + 10);
+  var formulas = {
+    'Sent Today': function (a) { return 'COUNTIFS(Log!$B:$B,' + a + ',Log!$D:$D,"SENT*",Log!$A:$A,">="&TODAY())'; },
+    'Total Sent': function (a) { return 'COUNTIFS(Log!$B:$B,' + a + ',Log!$D:$D,"SENT*")'; },
+    'Bounces': function (a) { return 'COUNTIFS(Log!$B:$B,' + a + ',Log!$D:$D,"BOUNCE")'; },
+    'Bounce %': function (a, r) { return 'IFERROR(' + col('Bounces') + r + '/' + col('Total Sent') + r + ',0)'; },
+    'Replies': function (a) { return 'COUNTIFS(Log!$B:$B,' + a + ',Log!$D:$D,"REPLY")+COUNTIFS(Log!$B:$B,' + a + ',Log!$D:$D,"UNSUB")'; },
+    'Reply %': function (a, r) { return 'IFERROR(' + col('Replies') + r + '/COUNTIFS(Log!$B:$B,' + a + ',Log!$D:$D,"SENT_1"),0)'; },
+    'Leads Assigned': function (a) { return 'COUNTIF(Leads!$' + L['Assigned Inbox'] + ':$' + L['Assigned Inbox'] + ',' + a + ')'; },
+    'Leads Waiting': function (a) { return 'COUNTIFS(Leads!$' + L['Assigned Inbox'] + ':$' + L['Assigned Inbox'] + ',' + a +
+      ',Leads!$' + L['Status'] + ':$' + L['Status'] + ',"New")'; },
+    'Health': function (a, r) {
+      var st = col('Status') + r, tot = col('Total Sent') + r, bp = col('Bounce %') + r;
+      return 'IF(' + st + '<>"Active","⏸ "&' + st + ',IF(' + tot + '<10,"⚪ Too early to tell",' +
+        'IF(' + bp + '>=0.05,"🔴 High bounces",IF(' + bp + '>=0.02,"🟡 Watch","🟢 Healthy"))))';
+    }
+  };
+  Object.keys(formulas).forEach(function (h) {
+    if (ic[h] === undefined) return;
+    var f = [];
+    for (var r = 2; r <= rows + 1; r++) {
+      var a = '$' + col('Inbox Email') + r;
+      f.push(['=IF(' + a + '="","",' + formulas[h](a, r) + ')']);
+    }
+    ib.getRange(2, ic[h] + 1, f.length, 1).setFormulas(f);
+  });
+}
+
+// Column letters by header name, e.g. { 'Email': 'B', 'Status': 'F' }.
+function sheetLetters_(sh) {
+  var m = colMap_(sh), out = {};
+  Object.keys(m).forEach(function (h) { out[h] = colLetter_(m[h] + 1); });
+  return out;
 }
 
 function addStatusColors_(ld, lc) {
@@ -287,6 +403,11 @@ function buildDashboard_(ss) {
   d.getCharts().forEach(function (c) { d.removeChart(c); });
   d.clear();
   var V = function (label) { return 'VLOOKUP("' + label + '",Settings!$A:$B,2,FALSE)'; };
+  var Lt = sheetLetters_(ss.getSheetByName(SHEET.LEADS));
+  var It = sheetLetters_(ss.getSheetByName(SHEET.INBOXES));
+  var LC = function (h) { return 'Leads!$' + Lt[h] + ':$' + Lt[h]; };
+  var LC2 = function (h) { return 'Leads!$' + Lt[h] + '$2:$' + Lt[h]; };
+  var IC2 = function (h) { return 'Inboxes!$' + It[h] + '$2:$' + It[h]; };
 
   d.getRange('A1').setFormula('="📧 "&' + V('Campaign name'))
     .setFontSize(18).setFontWeight('bold');
@@ -307,11 +428,11 @@ function buildDashboard_(ss) {
     ['Leads contacted', '=COUNTIF(Log!$D:$D,"SENT_1")', '#,##0'],
     ['Replies', '=COUNTIF(Log!$D:$D,"REPLY")+COUNTIF(Log!$D:$D,"UNSUB")', '#,##0'],
     ['Reply rate', '=IFERROR(B15/B14,0)', '0.0%'],
-    ['Interested', '=COUNTIF(Leads!$Q:$Q,"Interested")', '#,##0'],
-    ['Meetings booked', '=COUNTIF(Leads!$Q:$Q,"Meeting booked")', '#,##0'],
-    ['Active inboxes', '=COUNTIF(Inboxes!$D$2:$D,"Active")', '0'],
-    ['Daily capacity at full speed', '=ARRAYFORMULA(SUM(IF(Inboxes!$D$2:$D="Active",IF(Inboxes!$C$2:$C="",' +
-      V('Default daily limit per inbox') + ',Inboxes!$C$2:$C),0)))', '#,##0']
+    ['Interested', '=COUNTIF(' + LC('Outcome') + ',"Interested")', '#,##0'],
+    ['Meetings booked', '=COUNTIF(' + LC('Outcome') + ',"Meeting booked")', '#,##0'],
+    ['Active inboxes', '=COUNTIF(' + IC2('Status') + ',"Active")', '0'],
+    ['Daily capacity at full speed', '=ARRAYFORMULA(SUM(IF(' + IC2('Status') + '="Active",IF(' + IC2('Daily Limit') + '="",' +
+      V('Default daily limit per inbox') + ',' + IC2('Daily Limit') + '),0)))', '#,##0']
   ];
   d.getRange('A3:B3').setValues([['Campaign', '']]).setFontWeight('bold').setBackground('#e8f0fe');
   kpis.forEach(function (k, i) {
@@ -322,14 +443,14 @@ function buildDashboard_(ss) {
 
   d.getRange('D3:E3').setValues([['Leads by status', 'Count']]).setFontWeight('bold').setBackground('#e8f0fe');
   d.getRange('D4').setValue('Total leads');
-  d.getRange('E4').setFormula('=COUNTA(Leads!$B$2:$B)').setFontWeight('bold');
+  d.getRange('E4').setFormula('=COUNTA(' + LC2('Email') + ')').setFontWeight('bold');
   STATUS_LIST.forEach(function (s, i) {
     d.getRange(5 + i, 4).setValue(s);
-    d.getRange(5 + i, 5).setFormula('=COUNTIF(Leads!$F:$F,"' + s + '")');
+    d.getRange(5 + i, 5).setFormula('=COUNTIF(' + LC('Status') + ',"' + s + '")');
   });
   d.getRange(5 + STATUS_LIST.length, 4).setValue('No inbox assigned');
   d.getRange(5 + STATUS_LIST.length, 5).setFormula(
-    '=COUNTIFS(Leads!$B$2:$B,"<>",Leads!$G$2:$G,"")');
+    '=COUNTIFS(' + LC2('Email') + ',"<>",' + LC2('Assigned Inbox') + ',"")');
 
   var top = 23;
   var heads = ['Day', 'Date', 'Messages sent', 'First emails', 'Follow-ups', 'Bounces', 'Replies'];
@@ -366,10 +487,10 @@ function buildDashboard_(ss) {
   for (var ar = at + 1; ar <= at + 10; ar++) {
     var A = '$I' + ar;
     aRows.push([
-      '=IF(' + A + '="","",COUNTIFS(' + VAR + ',' + A + ',Leads!$H:$H,">0"))',
-      '=IF(' + A + '="","",COUNTIFS(' + VAR + ',' + A + ',Leads!$F:$F,"Replied")+COUNTIFS(' + VAR + ',' + A + ',Leads!$F:$F,"Unsubscribed"))',
+      '=IF(' + A + '="","",COUNTIFS(' + VAR + ',' + A + ',' + LC('Emails Sent') + ',">0"))',
+      '=IF(' + A + '="","",COUNTIFS(' + VAR + ',' + A + ',' + LC('Status') + ',"Replied")+COUNTIFS(' + VAR + ',' + A + ',' + LC('Status') + ',"Unsubscribed"))',
       '=IF(' + A + '="","",IFERROR(K' + ar + '/J' + ar + ',0))',
-      '=IF(' + A + '="","",COUNTIFS(' + VAR + ',' + A + ',Leads!$Q:$Q,"Interested")+COUNTIFS(' + VAR + ',' + A + ',Leads!$Q:$Q,"Meeting booked"))',
+      '=IF(' + A + '="","",COUNTIFS(' + VAR + ',' + A + ',' + LC('Outcome') + ',"Interested")+COUNTIFS(' + VAR + ',' + A + ',' + LC('Outcome') + ',"Meeting booked"))',
       '=IF(' + A + '="","",IFERROR(M' + ar + '/J' + ar + ',0))'
     ]);
   }
@@ -797,11 +918,14 @@ function connectInbox() {
       if (r.getSelectedButton() !== ui.Button.OK) return;
       name = r.getResponseText().trim();
     }
-    var row = lastFilledRow_(ib, 1) + 1;
-    ib.getRange(row, 1, 1, 4).setValues([[me, name || '', '', 'Active']]);
+    var ic = colMap_(ib);
+    var row = lastFilledRow_(ib, ic['Inbox Email'] + 1) + 1;
+    ib.getRange(row, ic['Inbox Email'] + 1).setValue(me);
+    ib.getRange(row, ic['Sender Name'] + 1).setValue(name || '');
+    ib.getRange(row, ic['Status'] + 1).setValue('Active');
     inbox = findInbox_(ss, me);
   } else if (SENDER_NAME && !inbox.name) {
-    ib.getRange(inbox.row, 2).setValue(SENDER_NAME);
+    setInboxCell_(ss, inbox.row, 'Sender Name', SENDER_NAME);
   }
 
   ScriptApp.getProjectTriggers().forEach(function (t) {
@@ -1640,42 +1764,40 @@ function settingsFromValues_(values) {
   return s;
 }
 
-function findInbox_(ss, email) {
+// Reads the Inboxes tab by column name: one object per Gmail.
+function inboxRows_(ss) {
   var ib = ss.getSheetByName(SHEET.INBOXES);
-  if (!ib) return null;
-  var n = lastFilledRow_(ib, 1);
-  if (n < 2) return null;
-  var v = ib.getRange(2, 1, n - 1, 4).getValues();
-  for (var i = 0; i < v.length; i++) {
-    if (normEmail_(v[i][0]) === email) {
-      return { row: i + 2, email: email, name: String(v[i][1] || '').trim(),
-               limit: Number(v[i][2]) || 0, status: String(v[i][3] || 'Active').trim() };
-    }
-  }
-  return null;
+  if (!ib || ib.getLastRow() < 2) return [];
+  var ic = colMap_(ib);
+  var v = ib.getRange(2, 1, ib.getLastRow() - 1, ib.getLastColumn()).getValues();
+  var out = [];
+  v.forEach(function (r, i) {
+    var email = normEmail_(r[ic['Inbox Email']]);
+    if (!email) return;
+    out.push({ row: i + 2, email: email, name: String(r[ic['Sender Name']] || '').trim(),
+               limit: Number(r[ic['Daily Limit']]) || 0, status: String(r[ic['Status']] || 'Active').trim() });
+  });
+  return out;
+}
+
+function findInbox_(ss, email) {
+  return inboxRows_(ss).filter(function (x) { return x.email === email; })[0] || null;
 }
 
 function allInboxes_(ss) {
-  var ib = ss.getSheetByName(SHEET.INBOXES);
-  var n = ib ? lastFilledRow_(ib, 1) : 1;
-  if (n < 2) return [];
-  return ib.getRange(2, 1, n - 1, 1).getValues()
-    .map(function (r) { return normEmail_(r[0]); }).filter(String);
+  return inboxRows_(ss).map(function (x) { return x.email; });
 }
 
 function activeInboxes_(ss) {
-  var ib = ss.getSheetByName(SHEET.INBOXES);
-  var n = lastFilledRow_(ib, 1);
-  if (n < 2) return [];
-  return ib.getRange(2, 1, n - 1, 4).getValues()
-    .filter(function (r) { return normEmail_(r[0]) && String(r[3] || 'Active').trim() === 'Active'; })
-    .map(function (r) { return normEmail_(r[0]); });
+  return inboxRows_(ss).filter(function (x) { return x.status === 'Active'; })
+    .map(function (x) { return x.email; });
 }
 
 function setInboxCell_(ss, row, header, value) {
   var ib = ss.getSheetByName(SHEET.INBOXES);
-  var col = INBOX_HEADERS.indexOf(header) + 1;
-  withLock_(function () { ib.getRange(row, col).setValue(value); });
+  var col = colMap_(ib)[header];
+  if (col === undefined) return;
+  withLock_(function () { ib.getRange(row, col + 1).setValue(value); });
 }
 
 function inboxStats_(ss, me) {
