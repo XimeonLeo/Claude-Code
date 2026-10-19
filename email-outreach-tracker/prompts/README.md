@@ -5,29 +5,22 @@ for each one, and give you a CSV to import into your master sheet.
 
 ## Start here: the master prompt (for everyone)
 
-**`0-MASTER-PROMPT.txt`** is the one prompt the whole team uses. It always gives
-the same file, in the same format, so imports don't break.
+**`0-MASTER-PROMPT.txt`** is the one prompt the whole team uses. Nobody edits it.
 
-1. Fill in **PART 1** only: your first and last name, your sending Gmail,
-   target audience, location and how many leads. Don't touch PART 2 or PART 3.
-2. Paste the whole prompt into a new chat (Claude, ChatGPT, Gemini or Grok)
-   with web search on.
-3. Download the CSV file it gives you. Don't copy cells by hand.
-4. Master sheet: **📧 Outreach → Upload a lead file (CSV)** → choose the file →
-   **Check file** → **Import**.
+1. Copy everything below the dashed line.
+2. Paste it into a new chat (Claude, ChatGPT, Gemini or Grok).
+3. Answer the questions: your name, what you offer, who, where, how many.
+   Not sure? Type **SKIP**.
+4. Download the file and click **📧 Outreach → Upload a lead file (CSV)**.
 
-What it guarantees:
-- Fixed headers, the same as the master sheet (see `../lead-template.csv`).
-- It finds each lead's real email (lead tools, then the company website,
-  then public pages) and **never guesses** one.
-- A lead only goes in the file when Email, First Name, Company, Subject,
-  Message, Follow-up 1, Follow-up 2, Angle, Send From and Added By are all
-  filled. The rest are listed under "Left out".
-- **Send From** = your Gmail, so your leads are sent from your Gmail.
-  **Added By** = your name, so you can see who added what.
+If you SKIP the extra offer details, the AI writes the simple email that works well:
+*"I have a way [your offer] can help your business... I have samples of what it
+looks like. Would you be interested in checking them out?"*
+If you give details, it rotates 4 styles (A, B, C, D) so you can see which wins.
 
-**Team leader:** fill PART 2 (service, proof, sample, link, angles) once, then
-share that copy with everyone.
+The file always has the same columns (see `../lead-template.csv`), and only
+complete leads with a real email. Which Gmail sends them and skipping people
+already contacted are handled by the sheet when you import.
 
 ## Other prompts (advanced)
 
