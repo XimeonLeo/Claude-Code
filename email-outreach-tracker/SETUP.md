@@ -63,6 +63,8 @@ into every Gmail's copy (keep the two lines at the top filled in), then click Se
 1. **Make the leads.** Copy everything in `LEAD-PROMPT.txt` below the dashed line,
    paste it into a new AI chat (Claude, ChatGPT, Gemini or Grok), and answer the questions.
    Not sure? Type **SKIP**. Download the file it gives you.
+   **Already have leads** (Apollo, Apify, a spreadsheet)? Answer **1** to the first question and
+   upload your list. The AI writes the emails for those people only.
 2. **Check the emails.** Run the file through an email checker (e.g. MillionVerifier).
    Keep only **Deliverable**. Bounces get Gmails blocked.
 3. **Upload.** In the master sheet: **📧 Outreach → Upload a lead file (CSV)** →
