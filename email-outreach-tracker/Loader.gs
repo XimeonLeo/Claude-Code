@@ -17,11 +17,12 @@ var CODE_URL = 'https://drive.google.com/file/d/1W5Ap33DTLvVwo05_U4hX3YNDnrgAmXr
 
 // ------------------------------------------------------------- do not change below this line
 
-var LOADER_VERSION = 2;
+var LOADER_VERSION = 3;
 var CHECK_EVERY_MINUTES = 60;
 var ENTRY_POINTS = ['onOpen', 'setupSheet', 'showUploadDialog', 'previewLeadText', 'importLeadText',
   'rebalanceLeads', 'connectInbox', 'disconnectInbox', 'whoAmI', 'runForMe', 'runNow', 'checkNow',
-  'sendTestEmail', 'addTeamSheet', 'refreshTeam', 'refreshTeamAuto', 'teamAutoOn', 'teamAutoOff'];
+  'sendTestEmail', 'addTeamSheet', 'refreshTeam', 'refreshTeamAuto', 'teamAutoOn', 'teamAutoOff',
+  'slot1', 'slot2', 'slot3', 'slot4', 'slot5', 'slot6', 'slot7', 'slot8', 'slot9', 'slot10'];
 
 // Every menu item, trigger and upload-window button calls one of these.
 function onOpen(e) { return run_('onOpen', arguments, true); }
@@ -42,6 +43,18 @@ function refreshTeam() { return run_('refreshTeam', arguments); }
 function refreshTeamAuto() { return run_('refreshTeamAuto', arguments); }
 function teamAutoOn() { return run_('teamAutoOn', arguments); }
 function teamAutoOff() { return run_('teamAutoOff', arguments); }
+
+// Spare buttons for future features, so new menu items never need a new loader.
+function slot1() { return run_('slot1', arguments); }
+function slot2() { return run_('slot2', arguments); }
+function slot3() { return run_('slot3', arguments); }
+function slot4() { return run_('slot4', arguments); }
+function slot5() { return run_('slot5', arguments); }
+function slot6() { return run_('slot6', arguments); }
+function slot7() { return run_('slot7', arguments); }
+function slot8() { return run_('slot8', arguments); }
+function slot9() { return run_('slot9', arguments); }
+function slot10() { return run_('slot10', arguments); }
 
 // Outreach -> Check for updates now
 function updateNow() {
@@ -66,7 +79,9 @@ function run_(name, args, quick) {
     throw new Error('The Outreach code has not been downloaded yet. Check CODE_URL at the top of the script, ' +
       'then click Outreach -> Finish setup (or run updateNow).');
   }
-  if (typeof CORE_[name] !== 'function') throw new Error(name + ' is not in this version of the code.');
+  if (typeof CORE_[name] !== 'function') {
+    throw new Error('This button needs a newer version of the code. Click Outreach -> Check for updates now, then try again.');
+  }
   return CORE_[name].apply(null, args);
 }
 
@@ -74,9 +89,11 @@ function run_(name, args, quick) {
 function build_() {
   var code = readStored_();
   if (!code) return null;
-  var exportList = ENTRY_POINTS.map(function (n) {
-    return n + ': (typeof ' + n + ' === "function" ? ' + n + ' : undefined)';
-  }).join(', ');
+  // Only connect buttons the downloaded code really defines. Otherwise a name would point
+  // back to the loader's own function and call itself forever.
+  var exportList = ENTRY_POINTS.filter(function (n) {
+    return new RegExp('(^|\\n)\\s*function\\s+' + n + '\\s*\\(').test(code);
+  }).map(function (n) { return n + ': ' + n; }).join(', ');
   var factory = new Function('OUTREACH_CONFIG', code + '\n;return { ' + exportList + ' };');
   return factory({ MASTER_SHEET: MASTER_SHEET, SENDER_NAME: SENDER_NAME, loader: true, loaderVersion: LOADER_VERSION });
 }
