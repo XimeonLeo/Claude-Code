@@ -4,6 +4,7 @@ HOW TO USE
 1. Copy EVERYTHING below the dashed line.
 2. Paste it into a new chat (Claude, ChatGPT, Gemini or Grok) and press Enter.
 3. Answer the questions. Not sure about one? Just type SKIP.
+   Don't know what to offer or who to target? Choose "Help me decide" and pick from the options it gives you.
    Already have a list of leads (from Apollo, Apify, a spreadsheet...)? Say so, and upload it when asked.
    Have your own email you want to use? Say so, and paste it when asked.
 4. The AI shows you the emails for ONE lead first. Type YES if you like them, or say what to change.
@@ -24,24 +25,69 @@ Wait for my answer before asking the next one. If I type SKIP, use the default a
 1. "Do you already have a list of leads, or should I find new ones?
     Type 1 if you have a list. Type 2 if I should find new leads."   (needed, no SKIP)
     If I type 1, say: "Please upload your file, or paste your list here." Wait for it.
-    Then skip questions 4, 5 and 6 (my list already says who and how many).
+    Then skip questions 5, 6 and 7 (my list already says who and how many).
 2. "What is your first and last name?"   (needed, no SKIP)
-3. "What do you offer?"   example: AI videos for businesses   (needed, no SKIP)
-4. "Who should we contact?"   example: dentists, real estate agents, fitness coaches   (needed, no SKIP)
-5. "Where are they?"   example: Lagos, Nigeria or Texas, USA   (needed, no SKIP)
-6. "How many leads do you want?"   default: 25
-7. "Do you have a link to your samples or past work?"   default: none
-8. "How should I write the emails?
+3. "Do you already know what you want to offer and who to send it to?
+    Type 1 if you know. Type 2 and I'll help you decide, step by step."   (needed, no SKIP)
+    If I type 2, do HELP ME DECIDE (below) before going on. It answers questions 4, 5 and 6 for me.
+4. "What do you offer?"   example: AI videos for businesses   (needed; "I don't know" = HELP ME DECIDE)
+5. "Who should we contact?"   example: dentists, real estate agents, fitness coaches   (needed; "I don't know" = HELP ME DECIDE)
+6. "Where are they?"   example: Lagos, Nigeria or Texas, USA   (needed; "I don't know" = HELP ME DECIDE)
+7. "How many leads do you want?"   default: 25
+8. "Do you have a link to your samples or past work?"   default: none
+9. "How should I write the emails?
     Type 1 and I will write them for you.
     Type 2 if you have your own email or structure you want me to follow."   (needed, no SKIP)
     If I type 2, say: "Please paste your email here. You can put parts I should fill in inside brackets,
     like [their business name] or [something specific about them]." Wait for it.
     Then ask: "Do you have your follow-up emails too? Paste them, or type SKIP and I will write them in the same style."
-9. Only if I typed 1 at question 8:
+10. Only if I typed 1 at question 9:
    "Do you want to tell me more about your offer, like results you got for clients?
     If not, type SKIP and I will use a simple email that works well."   default: SKIP
 
 Then show my answers in a short list and ask: "Shall I start?" Wait for yes.
+
+=== HELP ME DECIDE (only if I typed 2 at question 3, or said "I don't know" at question 4, 5 or 6) ===
+Walk me through it one part at a time. Only do the parts I don't know yet.
+At every step:
+- Give me 3 to 5 numbered options, each in 1 or 2 short, simple lines.
+- Mark the one you recommend with "(my pick)" and say why in a few words.
+- Let me type a number, or type my own answer.
+- Use web search so the options are real and current, not guesses.
+
+PART A: WHAT CAN I OFFER? (skip if I already know)
+First ask: "What are you good at, or what tools can you use?" with options like:
+  1. AI videos and talking avatars   2. Websites and landing pages   3. Social media posts and management
+  4. Chatbots and automation   5. Graphic design and branding   6. Something else (type it)
+Then turn my answer into 3 clear offers that small businesses pay for. For each: what they get, and the
+result for them. Example: "A 60-second AI video that explains your main service, for your website and
+Instagram, so people understand you before they call."
+I pick one. That is my answer to question 4.
+
+PART B: WHO SHOULD I SEND IT TO? (skip if I already know, or if I gave you my own list)
+Research and suggest 5 types of business that need my offer. Prefer small, owner-run businesses that have
+a website and a public email. For each one line on:
+  - why they need my offer
+  - how easy it is to find their emails (easy / medium / hard)
+  - what they usually spend on this kind of service (low / medium / high)
+I pick one. That is my answer to question 5.
+
+PART C: WHERE? (skip if I already know, or if I gave you my own list)
+Ask: "Which country or city are you in?" Then suggest 3 or 4 places to target, each with one line on why
+(for example: same time zone, bigger budgets, English-speaking, less competition). Include my own area as one option.
+I pick one. That is my answer to question 6.
+
+PART D: WHAT SHOULD I PITCH?
+For my offer and the businesses I picked, give 3 pitch ideas. Each one: the problem it solves for them,
+in their words, and my offer in one sentence.
+Example: "Dentists get the same questions about implants every day. Pitch: a short video on your website
+that answers them, so patients arrive ready to book."
+I pick one. Use it as the main idea of every first email, and in the Pain Points column.
+
+THEN SHOW MY PLAN:
+"Here is your plan: Offer: ... Target: ... Where: ... Pitch: ..."
+Ask: "Shall we use this plan?" If I say yes, go on with the questions I haven't answered yet.
+Also say: "Tip: save this plan. Next time, answer 1 at question 3 and type these answers."
 
 === IF I GAVE YOU MY OWN LIST (I typed 1 at question 1) ===
 - Do NOT search for new people. Use only the people in my list, in the same order.
@@ -56,7 +102,7 @@ Then show my answers in a short list and ask: "Shall I start?" Wait for yes.
   each time I type MORE, until the list is finished.
 
 === STEP 2: FIND THE PEOPLE (only if I typed 2 at question 1) ===
-Find business owners and decision makers (owner, founder, CEO, director) who match answers 4 and 5.
+Find business owners and decision makers (owner, founder, CEO, director) who match answers 5 and 6.
 Use any lead tool or connector you have, plus web search. Find about 1.5 times the number I asked for,
 so weak ones can be dropped. Never repeat a person from earlier in this chat.
 
@@ -132,8 +178,8 @@ Hi [first name],
 
 [One simple question?]
 
---- IF I TYPED 1 AT QUESTION 8 (you write the emails) ---
-- If I typed SKIP at question 9: use style C for everyone.
+--- IF I TYPED 1 AT QUESTION 9 (you write the emails) ---
+- If I typed SKIP at question 10: use style C for everyone.
 - If I told you more about my offer: rotate A, B, C, D (1st person A, 2nd B, 3rd C, 4th D, then again).
 
 C - Sample offer (the simple style): say I have a way [my offer] can help them with [the specific
@@ -160,7 +206,7 @@ I've put together a few samples of what this looks like for clinics like yours.
 
 Would you like me to send them over?
 
---- IF I TYPED 2 AT QUESTION 8 (my own email or structure) ---
+--- IF I TYPED 2 AT QUESTION 9 (my own email or structure) ---
 - Follow my structure: the same order, the same main points, the same offer and call to action.
 - Keep my key sentences and my way of speaking. Only fix grammar, spacing and anything that sounds robotic.
 - Fill every [bracket] with real details from Step 4. Even where I did not use brackets, make the opening
