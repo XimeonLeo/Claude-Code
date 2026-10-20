@@ -35,7 +35,7 @@ if (typeof OUTREACH_CONFIG === 'object' && OUTREACH_CONFIG) {
 
 // Change this every time you publish a new version, so you can see who has it
 // (Outreach -> Which Gmail am I using?).
-var CORE_VERSION = '2026-10-25';
+var CORE_VERSION = '2026-10-26';
 
 // ---------------------------------------------------------------- admins
 // Only these Gmails can use "Outreach -> Admin: watch team sheets".
@@ -218,6 +218,8 @@ function setupSheet() {
    'Replied At', 'Bounced At', 'Imported At'].forEach(function (h) {
     ld.getRange(2, lc[h] + 1, ld.getMaxRows() - 1, 1).setNumberFormat('yyyy-mm-dd hh:mm');
   });
+  // Emails Sent must be a plain number. Formatted as a date, it reads as a date and breaks sending.
+  ld.getRange(2, lc['Emails Sent'] + 1, ld.getMaxRows() - 1, 1).setNumberFormat('0');
   MESSAGE_COLS.concat(['Reply Snippet']).forEach(function (h) {
     ld.setColumnWidth(lc[h] + 1, 320);
     ld.getRange(2, lc[h] + 1, ld.getMaxRows() - 1, 1).setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
@@ -1387,7 +1389,7 @@ function runForInbox_() {
       var row = data[i];
       if (normEmail_(row[lc['Assigned Inbox']]) !== me || !row[lc['Email']]) continue;
       var status = row[lc['Status']];
-      var sent = Number(row[lc['Emails Sent']]) || 0;
+      var sent = emailsSent_(row, lc);
       var next = row[lc['Next Send']];
       if (status === STATUS.ACTIVE && sent < maxSteps && next instanceof Date && next <= now) due.push(i);
       else if (status === STATUS.NEW || (status === '' && sent === 0)) fresh.push(i);
@@ -1415,7 +1417,7 @@ function runForInbox_() {
       // numbers from an old lead (rows pasted over, or a lead set back to New).
       var leadStatus = String(lead[lc['Status']] || '').trim();
       var isFresh = leadStatus === STATUS.NEW || leadStatus === '';
-      var step = isFresh ? 1 : (Number(lead[lc['Emails Sent']]) || 0) + 1;
+      var step = isFresh ? 1 : emailsSent_(lead, lc) + 1;
       var vars = leadVars_(lead, lc, inbox.name);
       var text = messageFor_(lead, lc, step, st);
       if (!text) {
@@ -1898,7 +1900,7 @@ function analyzeTeam_(d, prev, now, todayStart) {
     if (seen[email]) s.dupes++;
     seen[email] = true;
     var status = String(row[lh['Status']] || '').trim();
-    var sent = Number(row[lh['Emails Sent']]) || 0;
+    var sent = emailsSent_(row, lh);
     s.totalSent += sent;
     if (sent > 0) s.emailed++;
     if (status === STATUS.NEW) {
@@ -2345,6 +2347,22 @@ function leadVars_(row, lc, senderName) {
 }
 
 // The text to send for a step: the lead's own message, or the default follow-up.
+// How many emails a lead has had (0-3). A cell formatted as a date comes back from Google as a
+// date, so it is turned back into its number. Anything else unreadable falls back to counting
+// the sent dates in the row.
+function emailsSent_(row, lc) {
+  var v = row[lc['Emails Sent']];
+  var n;
+  if (v instanceof Date) n = Math.round((v.getTime() - new Date(1899, 11, 30).getTime()) / 86400000);
+  else if (v === '' || v === null || v === undefined) n = 0;
+  else n = Number(v);
+  if (isFinite(n) && n >= 0 && n <= 3 && Math.floor(n) === n) return n;
+  return SENT_COLS.filter(function (h) {
+    var d = lc[h] === undefined ? '' : row[lc[h]];
+    return d !== '' && d !== null && d !== undefined;
+  }).length;
+}
+
 function messageFor_(row, lc, step, st) {
   var own = String(row[lc[MESSAGE_COLS[step - 1]]] || '').trim();
   if (own) return own;
