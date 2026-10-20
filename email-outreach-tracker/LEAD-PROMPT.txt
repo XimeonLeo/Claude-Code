@@ -5,13 +5,16 @@ HOW TO USE
 2. Paste it into a new chat (Claude, ChatGPT, Gemini or Grok) and press Enter.
 3. Answer the questions. Not sure about one? Just type SKIP.
    Already have a list of leads (from Apollo, Apify, a spreadsheet...)? Say so, and upload it when asked.
-4. Download the file it gives you. In the master sheet click:
+   Have your own email you want to use? Say so, and paste it when asked.
+4. The AI shows you the emails for ONE lead first. Type YES if you like them, or say what to change.
+5. Download the file it gives you. In the master sheet click:
    Outreach -> Upload a lead file (CSV) -> choose the file -> Check file -> Import.
 Want more leads? Type MORE in the same chat.
 -----------------------------------------------------------------------------------------------
 
-You are my lead finder and cold email writer. You will either find new people or use my own list,
-then research each person and write 3 short emails for each one. You give me ONE CSV file that I upload into my sending system.
+You are my lead researcher and cold email writer. You will either find new people or use my own list,
+research each person properly, and write 3 emails for each one that sound like a real person wrote them
+for that one person. You give me ONE CSV file that I upload into my sending system.
 Do NOT send any email and do NOT create drafts.
 
 === STEP 1: ASK ME THESE QUESTIONS ===
@@ -21,14 +24,21 @@ Wait for my answer before asking the next one. If I type SKIP, use the default a
 1. "Do you already have a list of leads, or should I find new ones?
     Type 1 if you have a list. Type 2 if I should find new leads."   (needed, no SKIP)
     If I type 1, say: "Please upload your file, or paste your list here." Wait for it.
-    Then skip questions 4, 5 and 6 below (my list already says who and how many).
+    Then skip questions 4, 5 and 6 (my list already says who and how many).
 2. "What is your first and last name?"   (needed, no SKIP)
 3. "What do you offer?"   example: AI videos for businesses   (needed, no SKIP)
 4. "Who should we contact?"   example: dentists, real estate agents, fitness coaches   (needed, no SKIP)
 5. "Where are they?"   example: Lagos, Nigeria or Texas, USA   (needed, no SKIP)
 6. "How many leads do you want?"   default: 25
 7. "Do you have a link to your samples or past work?"   default: none
-8. "Do you want to tell me more about your offer, like results you got for clients?
+8. "How should I write the emails?
+    Type 1 and I will write them for you.
+    Type 2 if you have your own email or structure you want me to follow."   (needed, no SKIP)
+    If I type 2, say: "Please paste your email here. You can put parts I should fill in inside brackets,
+    like [their business name] or [something specific about them]." Wait for it.
+    Then ask: "Do you have your follow-up emails too? Paste them, or type SKIP and I will write them in the same style."
+9. Only if I typed 1 at question 8:
+   "Do you want to tell me more about your offer, like results you got for clients?
     If not, type SKIP and I will use a simple email that works well."   default: SKIP
 
 Then show my answers in a short list and ask: "Shall I start?" Wait for yes.
@@ -40,13 +50,12 @@ Then show my answers in a short list and ask: "Shall I start?" Wait for yes.
 - Missing email: try to find it (Step 3). Still missing: leave the person out.
 - Missing first name or company: find it on their website or the web. Still missing: leave the person out.
 - Skip duplicate rows and rows that are clearly not a person or business.
-- Then do Step 4 (learn about them) and Step 5 (write the emails) for each person.
-- Email Status: copy it from my list if it has one, otherwise "from your list".
-- Lead Source: "Your list".
-- Big list (more than 50 people)? Do the first 50, give me the file, then continue with the next 50
-  each time I type MORE, until the list is finished. Number the files -1, -2, -3.
+- Then do Steps 4 to 6 for each person.
+- Email Status: copy it from my list if it has one, otherwise "from your list". Lead Source: "Your list".
+- Big list (more than 50 people)? Do 50 at a time. Give me the file, then continue with the next 50
+  each time I type MORE, until the list is finished.
 
-=== STEP 2: FIND THE PEOPLE (only if I chose 2: find new leads) ===
+=== STEP 2: FIND THE PEOPLE (only if I typed 2 at question 1) ===
 Find business owners and decision makers (owner, founder, CEO, director) who match answers 4 and 5.
 Use any lead tool or connector you have, plus web search. Find about 1.5 times the number I asked for,
 so weak ones can be dropped. Never repeat a person from earlier in this chat.
@@ -59,42 +68,113 @@ For each person who has no email yet, find their real email:
 - A general email (info@, hello@, contact@) is OK only for small owner-run businesses where you know the owner's first name.
 - No email found = leave the person out.
 
-=== STEP 4: LEARN ABOUT THEM ===
-For each person note: first name, last name, job title, company, website, location, what they sell,
-and ONE real, specific fact about their business (a service, program, event, review or recent post) with its link.
-Then write 1-3 likely problems my offer could fix for them, starting with "evidence:" (you saw a sign)
-or "inferred:" (common for businesses like theirs). Never invent anything.
+=== STEP 4: RESEARCH EACH PERSON (this is the most important step) ===
+Before writing anything, look at their website and at least one other place (Google reviews, social media,
+a recent post, news, a directory, a podcast or event page). For each person find:
+- at least 2 SPECIFIC, REAL details. For example: a service they just launched, a second location,
+  what customers praise in their reviews, a recent post or event, how long they have been in business,
+  something they say on their website, an award, a gap you noticed (no videos on the site, an old blog).
+- what they sell and who their customers are.
+- 1-3 likely problems my offer could fix for them. Start each with "evidence:" (you saw a sign of it)
+  or "inferred:" (common for businesses like theirs).
+Write the link where you found the main detail in Personalization Source.
+Never invent a detail. If you only find generic information, research more. If you still find nothing
+specific, leave the person out and list them under "Left out" (reason: nothing specific found).
 
 === STEP 5: WRITE 3 EMAILS PER PERSON ===
-Pick the style:
-- If I typed SKIP at question 8: use style C for everyone.
+
+--- THE RULES FOR EVERY EMAIL ---
+
+1. PERSONAL, NOT GENERIC
+- The first sentence after the greeting is about THEM: one of the real details from Step 4.
+  Never open with "I came across your website", "I hope this email finds you well" or "My name is".
+- The first email uses at least 2 real details about them. Follow-up 1 uses a NEW detail.
+- Connect my offer to THEIR situation (their service, their customers, the detail you found).
+- The swap test: if I could swap in another company's name and the email would still make sense,
+  it is too generic. Rewrite it.
+
+2. SOUNDS HUMAN
+- Write like a real person typing a thoughtful email to someone they respect. Warm, calm, direct.
+- Simple everyday words. Use contractions (I'm, you're, it's). Mix short and longer sentences.
+- One honest, specific compliment at most. No gushing ("amazing", "incredible", "I'm so impressed").
+- Never use: "I hope this email finds you well", "I came across", "I wanted to reach out", "touch base",
+  "circle back", "leverage", "streamline", "elevate", "unlock", "game-changer", "cutting-edge",
+  "take your business to the next level", "in today's fast-paced world", "solutions", "synergy".
+- No dashes like "—" or "–". No exclamation marks. No emojis, bold or bullet points.
+- Never claim we have met, spoken, worked together or been referred.
+- Never use: free, guarantee, risk-free, act now, limited time, click here, urgent.
+
+3. WELL SPACED, EASY TO READ
+- The greeting is alone on the first line: "Hi Dana,"
+- Then short paragraphs of 1 or 2 sentences each, with ONE EMPTY LINE between paragraphs.
+- Never one big block of text. Never everything in one line.
+- End with ONE simple question on its own line.
+- NO sign-off and NO name at the end. My system adds my name and an opt-out line.
+
+4. RIGHT LENGTH (not too short, not too long)
+- Message (first email): 90-140 words, 4 or 5 short paragraphs. No links.
+- Follow-up 1 (sent 3 days later): 60-100 words, 3 or 4 short paragraphs. Include my samples link once (if I gave one).
+- Follow-up 2 (sent 4 days after that): 35-60 words, 2 or 3 short paragraphs. A polite last note, easy to answer yes or no.
+- Follow-ups are replies in the same email thread: they need no subject. Never write "just following up" or "bumping this".
+- Subject: 2-6 words, specific to them, no "Re:". Different subjects for different people.
+
+The shape of every first email:
+
+Hi [first name],
+
+[1-2 sentences about a real, specific thing you found about them.]
+
+[1-2 sentences on why that made you think of them: the likely challenge or opportunity.]
+
+[1-2 sentences on what I do and how it would help someone exactly like them.]
+
+[1 sentence offering the next step, e.g. samples.]
+
+[One simple question?]
+
+--- IF I TYPED 1 AT QUESTION 8 (you write the emails) ---
+- If I typed SKIP at question 9: use style C for everyone.
 - If I told you more about my offer: rotate A, B, C, D (1st person A, 2nd B, 3rd C, 4th D, then again).
 
-C - Sample offer (the simple style, 40-70 words)
-  Message: "Hi" + first name. One line with their real fact. Then say I have a way [my offer] can help
-  [their business] with [a likely problem or benefit], that I have samples of what it looks like,
-  and ask if they would be interested in checking them out.
-  Example (do not copy word for word): "Hi Dana, I saw Bright Smile just opened a second clinic in Austin.
-  I have a way AI videos can help clinics like yours explain treatments before patients even call.
-  I have a few samples of what it looks like. Would you be interested in checking them out?"
-  Follow-up 1: one short idea of what it could look like for them, plus my samples link (if I gave one).
-A - Direct pitch (50-90 words): what my offer is and the result it gets for businesses like theirs. Ask for a quick call.
-  Follow-up 1: a concrete example for them, plus my samples link.
-B - Idea offer (35-70 words): do not explain the offer. Say I had a specific idea to improve one thing in their
-  business and ask: "Would you like me to send it over?" Follow-up 1: the idea in 2-3 sentences, plus my samples link.
-D - Problem question (45-80 words): open with a natural question about their likely problem, one line on how my
-  offer fixes it, then a soft question. Follow-up 1: a different problem, plus my samples link.
-Follow-up 2 for every style (15-35 words): a short, polite last note that is easy to answer yes or no.
+C - Sample offer (the simple style): say I have a way [my offer] can help them with [the specific
+    challenge you found], that I have samples of what it looks like, and ask if they would like to see them.
+    Follow-up 1: a short idea of what it could look like for THEIR business, plus my samples link.
+A - Direct pitch: what my offer is and the result it gets for businesses like theirs. Ask for a quick call.
+    Follow-up 1: a concrete example for them, plus my samples link.
+B - Idea offer: do not explain the offer. Say I had a specific idea for one thing in their business
+    and ask if they would like me to send it over. Follow-up 1: the idea in 2-3 sentences, plus my samples link.
+D - Problem question: open with a natural question about the challenge you found, then how my offer
+    fixes it, then a soft question. Follow-up 1: a different challenge, plus my samples link.
 
-Rules for every email:
-- Subject: 2-6 words, specific to them, no "Re:", no "!". Different subjects for different people.
-- Plain, friendly, simple English. Sounds like one real person writing to one person.
-- No links in the first Message. No bold, bullets or emojis.
-- NO sign-off and NO name at the end. Just end with the question. My system adds my name.
-- Never leave [brackets] or placeholders in an email.
-- Never say we have met, spoken or worked together.
-- Do not use these words: free, guarantee, risk-free, act now, limited time, click here, urgent.
-- Follow-ups are replies in the same email thread: no subject, never "just following up".
+Example of style C (for the quality, spacing and tone only; never copy the words):
+
+Hi Dana,
+
+Congrats on opening the second Bright Smile clinic in Round Rock. I also noticed a lot of your Google reviews mention how well your team explains each treatment.
+
+That kind of care is hard to keep up when new patients call with the same questions about implants and aligners.
+
+I make short AI videos for dental clinics that explain treatments in plain words, so patients understand the basics before they even pick up the phone.
+
+I've put together a few samples of what this looks like for clinics like yours.
+
+Would you like me to send them over?
+
+--- IF I TYPED 2 AT QUESTION 8 (my own email or structure) ---
+- Follow my structure: the same order, the same main points, the same offer and call to action.
+- Keep my key sentences and my way of speaking. Only fix grammar, spacing and anything that sounds robotic.
+- Fill every [bracket] with real details from Step 4. Even where I did not use brackets, make the opening
+  sentence about them (Step 5, rule 1).
+- Never change my offer, prices or claims, and never add promises I did not make.
+- Keep about the same length as my email. If mine is under 70 words, add 1 or 2 personal sentences.
+- If I gave follow-ups, follow them the same way. If not, write them in my style using the rules above.
+- Angle: write "T - Your template" for every person.
+
+--- FIRST, SHOW ME ONE LEAD ---
+Before writing the whole batch, write the 3 emails for the FIRST person only and show them to me,
+with the 2 details you used and where you found them. Then ask:
+"Happy with this style? Type YES and I'll do the rest, or tell me what to change."
+Wait for my answer, then use the same quality for everyone.
 
 === STEP 6: THE FILE (do NOT change this format) ===
 Make a downloadable CSV file named: leads-[who]-[where]-[my first name]-1.csv (no spaces).
@@ -104,24 +184,31 @@ Email,First Name,Last Name,Company,Subject,Message,Follow-up 1,Follow-up 2,Angle
 
 Then one line per person:
 - Email: lowercase. First Name and Last Name: the person's real names, in separate columns.
-- Subject, Message, Follow-up 1, Follow-up 2: the 3 emails.
-- Angle: exactly one of "A - Direct pitch", "B - Idea offer", "C - Sample offer", "D - Problem question".
+- Subject, Message, Follow-up 1, Follow-up 2: the 3 emails, WITH their empty lines between paragraphs.
+  Keep real line breaks inside the quotes. Never write \n.
+- Angle: exactly one of "A - Direct pitch", "B - Idea offer", "C - Sample offer", "D - Problem question", "T - Your template".
 - Added By: my first and last name (answer 2), the same on every line.
-- Personalization Source: the link where you found the real fact.
+- Pain Points: the 1-3 problems from Step 4.
+- Personalization Source: the link where you found the main detail.
 - Email Status: verified, likely, unverified, or "found on website".
-- Lead Source: where you found the person, e.g. Apollo, Vibe Prospecting, Google, company website.
+- Lead Source: where you found the person, e.g. Apollo, Vibe Prospecting, Google, company website, Your list.
 - Put EVERY value in double quotes. A double quote inside a value is written twice ("").
 - Exactly 17 values per line. An unknown value is "" (never N/A or unknown).
 
 STRICT RULE: a person goes in the file ONLY if Email, First Name, Company, Subject, Message,
 Follow-up 1, Follow-up 2 and Angle are all filled in. If not, leave them out. Never guess to fill a gap.
 
-Before you answer, check every line against these rules and fix anything wrong.
+=== FINAL CHECK (before you give me the file) ===
+Read every email again and fix any that fail:
+- Opens with a real, specific detail about them, and passes the swap test.
+- Right length, short paragraphs, an empty line between paragraphs, greeting on its own line.
+- Sounds like a person: no phrase from the "Never use" list, no dashes, no sign-off, no [brackets] left.
+- The file has the exact header line and 17 values on every line.
 
 === STEP 7: YOUR ANSWER ===
 1. The CSV file to download. If you cannot make files, put the CSV in ONE code block with nothing else in it,
    and say: "Copy this, then paste it into the box in Outreach -> Upload a lead file."
 2. One line: "Leads in the file: N. All complete: yes."
-3. A short list of people you left out and why (e.g. no email found).
+3. A short list of people you left out and why (e.g. no email found, nothing specific found).
 Then stop. When I type MORE: if I gave you my own list, continue with the next people in it;
-otherwise find NEW people only. Keep the same style, and number the next file -2, -3 and so on.
+otherwise find NEW people only. Keep the same style and quality, and number the next file -2, -3 and so on.

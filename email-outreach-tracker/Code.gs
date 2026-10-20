@@ -787,9 +787,9 @@ function importRows_(ss, values, source, sendFrom) {
       line[lc['Company']] = map.company >= 0 ? String(row[map.company]).trim() : '';
       var cell = function (c) { return c >= 0 ? cleanText_(row[c]) : ''; };
       line[lc['Subject']] = cell(map.subject);
-      line[lc['Message']] = cell(map.message);
-      line[lc['Follow-up 1 Message']] = cell(map.fu1);
-      line[lc['Follow-up 2 Message']] = cell(map.fu2);
+      line[lc['Message']] = spaceOut_(cell(map.message));
+      line[lc['Follow-up 1 Message']] = spaceOut_(cell(map.fu1));
+      line[lc['Follow-up 2 Message']] = spaceOut_(cell(map.fu2));
       if (lc['Variant'] !== undefined) line[lc['Variant']] = cell(map.variant);
       if (!line[lc['Message']]) res.noMessage++;
       line[lc['Status']] = line[lc['Message']] ? STATUS.NEW : STATUS.NEEDS;
@@ -2014,6 +2014,35 @@ function cleanText_(v) {
   s = s.replace(/\r\n?/g, '\n').trim();
   if (s.length > 1 && /^".*"$/s.test(s)) s = s.slice(1, -1).trim();
   return s;
+}
+
+// Emails that arrive as one block of text (no line breaks) get the greeting on its own
+// line and short paragraphs of up to 2 sentences, with the last question on its own.
+// Text that already has line breaks is left exactly as it is.
+function spaceOut_(text) {
+  var t = String(text || '').trim();
+  if (!t || t.indexOf('\n') >= 0) return t;
+  var greeting = '';
+  var g = t.match(/^((?:hi|hello|hey|dear|good (?:morning|afternoon))\b[^,.!?\n]{0,40},)\s*/i);
+  if (g) { greeting = g[1]; t = t.slice(g[0].length); }
+  var abbrev = /(?:^|\s)(?:dr|mr|mrs|ms|st|inc|ltd|co|jr|sr|vs|etc|e\.g|i\.e|no)\.$/i;
+  var sentences = [], start = 0;
+  for (var i = 0; i < t.length; i++) {
+    var ch = t.charAt(i);
+    if ((ch === '.' || ch === '?' || ch === '!') && /\s/.test(t.charAt(i + 1) || '') &&
+        /[A-Z0-9"'\u2018\u201C]/.test(t.slice(i + 1).trim().charAt(0)) && !abbrev.test(t.slice(start, i + 1))) {
+      sentences.push(t.slice(start, i + 1).trim());
+      start = i + 1;
+    }
+  }
+  if (start < t.length) sentences.push(t.slice(start).trim());
+  sentences = sentences.filter(String);
+  if (sentences.length < 3 && !greeting) return String(text).trim();
+  var last = sentences.length > 1 && /\?$/.test(sentences[sentences.length - 1]) ? sentences.pop() : '';
+  var paras = [];
+  for (var k = 0; k < sentences.length; k += 2) paras.push(sentences.slice(k, k + 2).join(' '));
+  if (last) paras.push(last);
+  return (greeting ? greeting + '\n\n' : '') + paras.join('\n\n');
 }
 
 function dailyLimitFor_(limit, st, dayIdx) {

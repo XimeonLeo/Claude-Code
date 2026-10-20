@@ -65,6 +65,8 @@ into every Gmail's copy (keep the two lines at the top filled in), then click Se
    Not sure? Type **SKIP**. Download the file it gives you.
    **Already have leads** (Apollo, Apify, a spreadsheet)? Answer **1** to the first question and
    upload your list. The AI writes the emails for those people only.
+   **Have your own email?** Answer **2** to "How should I write the emails?" and paste it. The AI keeps your
+   structure and fills in personal details for each lead. It shows you one lead's emails first, for your OK.
 2. **Check the emails.** Run the file through an email checker (e.g. MillionVerifier).
    Keep only **Deliverable**. Bounces get Gmails blocked.
 3. **Upload.** In the master sheet: **📧 Outreach → Upload a lead file (CSV)** →
