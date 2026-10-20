@@ -27,6 +27,16 @@
 var MASTER_SHEET = '';   // e.g. 'https://docs.google.com/spreadsheets/d/1AbC.../edit'
 var SENDER_NAME = '';    // e.g. 'Sarah Jones'
 
+// When this code runs through Loader.gs (automatic updates), the loader's settings are used.
+if (typeof OUTREACH_CONFIG === 'object' && OUTREACH_CONFIG) {
+  if (OUTREACH_CONFIG.MASTER_SHEET) MASTER_SHEET = OUTREACH_CONFIG.MASTER_SHEET;
+  if (OUTREACH_CONFIG.SENDER_NAME) SENDER_NAME = OUTREACH_CONFIG.SENDER_NAME;
+}
+
+// Change this every time you publish a new version, so you can see who has it
+// (Outreach -> Which Gmail am I using?).
+var CORE_VERSION = '2026-10-20';
+
 // ---------------------------------------------------------------- admins
 // Only these Gmails can use "Outreach -> Admin: watch team sheets".
 // Fill this in BEFORE you give Code.gs to your team. Separate several with commas.
@@ -124,6 +134,7 @@ function onOpen() {
     .addItem('Check replies & bounces now', 'checkNow')
     .addSeparator()
     .addItem('Which Gmail am I using?', 'whoAmI')
+    .addItem(viaLoader_() ? 'Check for updates now' : 'Version: ' + CORE_VERSION, viaLoader_() ? 'updateNow' : 'whoAmI')
     .addSeparator()
     .addSubMenu(SpreadsheetApp.getUi().createMenu('Admin: watch team sheets')
       .addItem('Add a team member\'s sheet', 'addTeamSheet')
@@ -962,7 +973,13 @@ function disconnectInbox() {
 
 function whoAmI() {
   alert_('You are using: ' + (me_() || '(unknown)') +
-    '\n\nAnything you click in this menu happens as this Gmail.');
+    '\n\nAnything you click in this menu happens as this Gmail.' +
+    '\n\nScript version: ' + CORE_VERSION + (viaLoader_() ? ' (updates automatically)' : ' (pasted by hand)'));
+}
+
+// True when this code was loaded by Loader.gs.
+function viaLoader_() {
+  return typeof OUTREACH_CONFIG === 'object' && !!OUTREACH_CONFIG;
 }
 
 // ---------------------------------------------------------------- the hourly run

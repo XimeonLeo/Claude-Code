@@ -3,15 +3,38 @@
 One Google Sheet sends your outreach from up to 15 Gmails, by itself, and tracks
 everything: who got which email, from which Gmail, follow-ups, replies and bounces.
 
-**You need 3 files:**
+**The files:**
 
-| File | What it's for |
-|---|---|
-| `Code.gs` | The script. You paste it into Google once per Gmail. |
-| `LEAD-PROMPT.txt` | The prompt your team pastes into an AI chat to get leads. |
-| `SETUP.md` | This guide. |
+| File | Who uses it | What it's for |
+|---|---|---|
+| `Loader.gs` | Everyone | Pasted **once** into each sheet and each Gmail's script. It downloads the latest code by itself |
+| `Code.gs` | Admin only | The real code. It lives in the admin's Google Drive. Update it there and everyone gets the update |
+| `LEAD-PROMPT.txt` | Everyone | The prompt for getting leads |
+| `SETUP.md` | Everyone | This guide |
 
 ---
+
+## Part 0 (admin only, once): publish the code
+
+1. Open `Code.gs` and check your admin Gmail is filled in near the top: `var ADMINS = 'you@gmail.com';`
+2. Upload `Code.gs` to your **Google Drive**.
+3. Right-click it → **Share** → General access: **Anyone with the link** → **Viewer** → **Copy link** → Done.
+4. Open `Loader.gs` and paste that link into the line near the top:
+   ```
+   var CODE_URL = 'paste the Drive link here';
+   ```
+5. Save `Loader.gs` and give **that** file to your team. They never need `Code.gs`.
+
+**To send out an update later** (for example when you get a new `Code.gs`):
+1. Test it first: paste the new `Code.gs` into a test sheet's script and check it works.
+2. In Google Drive, right-click your `Code.gs` → **File information** → **Manage versions** →
+   **Upload new version** → choose the new file. (This keeps the same link.)
+3. Every sheet and every Gmail gets it **within an hour**, by itself.
+   To check: **📧 Outreach → Which Gmail am I using?** shows the version. To get it right away:
+   **📧 Outreach → Check for updates now**.
+
+If an update can't be downloaded or has a mistake in it, every sheet keeps running the version it already has.
+
 
 ## Part 1: Make the master sheet (once, 15 minutes)
 
@@ -19,9 +42,10 @@ Do this signed in to the Gmail that will **own** the sheet.
 
 1. Go to **sheets.new**. Name the sheet, e.g. "Outreach Master".
 2. **File → Settings → Time zone**: choose your time zone. Click Save.
-3. **Extensions → Apps Script**. Delete everything in the editor, paste all of `Code.gs`, click 💾 **Save**.
+3. **Extensions → Apps Script**. Delete everything in the editor, paste all of `Loader.gs` (from your admin), click 💾 **Save**.
 4. On the left, click **+** next to **Services** → choose **Gmail API** → **Add**.
 5. Go back to the sheet and **reload the page**. Wait for the **📧 Outreach** menu.
+   The first time, it only shows **Finish setup: download the code**. Click it, allow it (see step 6), then reload again.
 6. Click **📧 Outreach → 1. Set up / repair this sheet**.
    Google asks for permission: **Continue** → choose your Gmail → **Advanced** →
    **Go to … (unsafe)** → **Allow**. ("Unsafe" only means it's your own private script.)
@@ -39,7 +63,7 @@ Do this signed in to the Gmail that will **own** the sheet.
    Copy the sheet's link from the address bar.
 2. Open an **Incognito window** and sign in to **only** the next Gmail.
 3. Go to **script.google.com** → **New project**.
-4. Delete what's there, paste all of `Code.gs`, then fill in the two lines at the top:
+4. Delete what's there, paste all of `Loader.gs`, then fill in the two lines at the top:
    ```
    var MASTER_SHEET = 'paste the master sheet link here';
    var SENDER_NAME = 'Sarah Jones';
@@ -55,8 +79,12 @@ Do this signed in to the Gmail that will **own** the sheet.
 Each connected Gmail now sends **by itself every hour** during the send window,
 even when your computer is off.
 
-**If you get a new Code.gs later,** paste it into the master sheet's script **and**
-into every Gmail's copy (keep the two lines at the top filled in), then click Set up again.
+**Updates arrive by themselves** within an hour. Nobody pastes code again.
+
+**Already using the old way (Code.gs pasted in)?** Switch once: in the master sheet's script and in
+each Gmail's copy, replace everything with `Loader.gs`. Copy your `MASTER_SHEET` and `SENDER_NAME`
+lines across in the Gmail copies. Save, choose **updateNow** in the dropdown, click **▶ Run** and **Allow**.
+Hourly sending keeps working; nothing else changes.
 
 ## Part 3: Get leads and upload them
 
@@ -151,18 +179,18 @@ tabs (keep the header rows), update Settings, and connect the new Gmails (Part 2
 
 If you've set this system up for other people, you can watch all their sheets from your own master sheet.
 
-**First, lock it to you.** Before giving `Code.gs` to anyone, open it and fill in the line near the top:
+**First, lock it to you** (Part 0, step 1). In `Code.gs`, near the top:
 ```
 var ADMINS = 'you@gmail.com';
 ```
-Then only that Gmail can use the Admin menu. Everyone gets this same file.
+Then only that Gmail can use the Admin menu. Because everyone downloads the code from your Drive, nobody else can change this.
 
 **Each team member (once):** in their master sheet click **Share** → add your Gmail → **Viewer** → Send.
 Share **only** with the admins. Nobody can watch a sheet that wasn't shared with them.
-They must also have the latest `Code.gs` and have clicked **Set up / repair**.
+They must use `Loader.gs` and have clicked **Set up / repair** once.
 
 **You (once):**
-1. Paste the latest `Code.gs` into your own master sheet's script and reload.
+1. Make sure your own master sheet uses `Loader.gs` (Part 1).
 2. **📧 Outreach → Admin: watch team sheets → Add a team member's sheet.** Type their name, paste their sheet link.
    Repeat for each person. (Or type names in column A and links in column B of the **Team** tab.)
 3. **📧 Outreach → Admin: watch team sheets → Turn on automatic checks (every 2 hours).**
@@ -212,8 +240,9 @@ It shows who edited what and when, and you can restore an earlier version.
 | "Missing columns" on upload | Make the file again with `LEAD-PROMPT.txt` |
 | Excel file won't upload | Open it in Google Sheets → File → Download → CSV, then upload that |
 | Team tab: "Cannot open this sheet" | They haven't shared it with you, removed your access, or the link is wrong |
-| Team tab: "columns/rows deleted or renamed" right after adding someone | Their script is older. Have them paste the latest Code.gs and click Set up / repair |
-| Leads or data look missing after Set up / repair | Nothing is deleted: row 1 (the column names) had been changed, so the old script added new empty columns. **File → Version history → See version history** → pick a version from before the repair → **Restore this version**. Then paste the latest Code.gs and run Set up / repair again |
+| Team tab: "columns/rows deleted or renamed" right after adding someone | Their sheet was set up by an older version. Have them click Set up / repair |
+| "Could not update" or the menu only shows "Finish setup" | Check `CODE_URL` in the loader, and that the Drive file is shared as **Anyone with the link → Viewer** |
+| Leads or data look missing after Set up / repair | Nothing is deleted: row 1 (the column names) had been changed, so the old script added new empty columns. **File → Version history → See version history** → pick a version from before the repair → **Restore this version**. Then run Set up / repair again (it now checks before changing anything) |
 | "Nothing was changed. Set up / repair stopped..." | Row 1 of a tab was sorted, renamed or deleted. Do what the message says (Version history is easiest), then run Set up / repair again |
 | `#VALUE!` on Dashboard | The Goal in Settings must be a plain number, e.g. 5000 |
 | Leads with no Gmail | Connect your Gmails, then "Spread waiting leads across inboxes" |
