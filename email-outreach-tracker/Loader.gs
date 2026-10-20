@@ -17,6 +17,7 @@ var CODE_URL = 'https://drive.google.com/file/d/1W5Ap33DTLvVwo05_U4hX3YNDnrgAmXr
 
 // ------------------------------------------------------------- do not change below this line
 
+var LOADER_VERSION = 2;
 var CHECK_EVERY_MINUTES = 60;
 var ENTRY_POINTS = ['onOpen', 'setupSheet', 'showUploadDialog', 'previewLeadText', 'importLeadText',
   'rebalanceLeads', 'connectInbox', 'disconnectInbox', 'whoAmI', 'runForMe', 'runNow', 'checkNow',
@@ -77,7 +78,7 @@ function build_() {
     return n + ': (typeof ' + n + ' === "function" ? ' + n + ' : undefined)';
   }).join(', ');
   var factory = new Function('OUTREACH_CONFIG', code + '\n;return { ' + exportList + ' };');
-  return factory({ MASTER_SHEET: MASTER_SHEET, SENDER_NAME: SENDER_NAME, loader: true });
+  return factory({ MASTER_SHEET: MASTER_SHEET, SENDER_NAME: SENDER_NAME, loader: true, loaderVersion: LOADER_VERSION });
 }
 
 // Downloads the latest code (at most once an hour unless forced) and keeps it if it is valid.
@@ -147,5 +148,8 @@ function permissionsList_() {
   Gmail.Users.Messages.send({}, 'me'); Gmail.Users.Messages.get('me', '');
   ScriptApp.newTrigger('').timeBased(); ScriptApp.getProjectTriggers();
   Session.getEffectiveUser().getEmail(); HtmlService.createHtmlOutput('');
+  SpreadsheetApp.getUi().showModalDialog(HtmlService.createHtmlOutput(''), '');
+  SpreadsheetApp.getUi().showModelessDialog(HtmlService.createHtmlOutput(''), '');
+  SpreadsheetApp.getUi().showSidebar(HtmlService.createHtmlOutput(''));
   LockService.getScriptLock(); UrlFetchApp.fetch('');
 }

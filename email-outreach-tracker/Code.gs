@@ -35,7 +35,7 @@ if (typeof OUTREACH_CONFIG === 'object' && OUTREACH_CONFIG) {
 
 // Change this every time you publish a new version, so you can see who has it
 // (Outreach -> Which Gmail am I using?).
-var CORE_VERSION = '2026-10-20';
+var CORE_VERSION = '2026-10-21';
 
 // ---------------------------------------------------------------- admins
 // Only these Gmails can use "Outreach -> Admin: watch team sheets".
@@ -537,7 +537,14 @@ function showUploadDialog() {
   }).join('');
   var html = HtmlService.createHtmlOutput(UPLOAD_HTML_.replace('{{OPTIONS}}', options))
     .setWidth(680).setHeight(600);
-  SpreadsheetApp.getUi().showModalDialog(html, 'Upload a lead file');
+  try {
+    SpreadsheetApp.getUi().showModalDialog(html, 'Upload a lead file');
+  } catch (e) {
+    if (!/permission/i.test(e.message)) throw e;
+    alert_('This sheet needs the newest Loader.gs before the upload window can open (one time only).\n\n' +
+      '1. Extensions -> Apps Script.\n2. Replace everything with the new Loader.gs from your admin, and Save.\n' +
+      '3. Choose updateNow in the dropdown, click Run, then Allow.\n4. Reload the sheet and try again.');
+  }
 }
 
 // Called by the upload window: checks the file without importing anything.
@@ -974,7 +981,8 @@ function disconnectInbox() {
 function whoAmI() {
   alert_('You are using: ' + (me_() || '(unknown)') +
     '\n\nAnything you click in this menu happens as this Gmail.' +
-    '\n\nScript version: ' + CORE_VERSION + (viaLoader_() ? ' (updates automatically)' : ' (pasted by hand)'));
+    '\n\nScript version: ' + CORE_VERSION + (viaLoader_() ? ' (updates automatically, loader ' +
+      (OUTREACH_CONFIG.loaderVersion || 1) + ')' : ' (pasted by hand)'));
 }
 
 // True when this code was loaded by Loader.gs.
