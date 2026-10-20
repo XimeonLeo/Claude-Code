@@ -35,7 +35,7 @@ if (typeof OUTREACH_CONFIG === 'object' && OUTREACH_CONFIG) {
 
 // Change this every time you publish a new version, so you can see who has it
 // (Outreach -> Which Gmail am I using?).
-var CORE_VERSION = '2026-10-21';
+var CORE_VERSION = '2026-10-22';
 
 // ---------------------------------------------------------------- admins
 // Only these Gmails can use "Outreach -> Admin: watch team sheets".
@@ -134,6 +134,7 @@ function onOpen() {
     .addItem('Check replies & bounces now', 'checkNow')
     .addSeparator()
     .addItem('Which Gmail am I using?', 'whoAmI')
+    .addItem('About ' + BRAND.name, 'slot1')
     .addItem(viaLoader_() ? 'Check for updates now' : 'Version: ' + CORE_VERSION, viaLoader_() ? 'updateNow' : 'whoAmI')
     .addSeparator()
     .addSubMenu(SpreadsheetApp.getUi().createMenu('Admin: watch team sheets')
@@ -222,11 +223,12 @@ function setupSheet() {
 
   // Dashboard (rebuilt every time, holds no data of its own)
   buildDashboard_(ss);
+  styleTabs_(ss);
 
   // Tab order and colours
   var order = [SHEET.DASH, SHEET.LEADS, SHEET.INBOXES,
                SHEET.SETTINGS, SHEET.LOG, SHEET.DNC];
-  var colours = ['#1a73e8', '#188038', '#e37400', '#5f6368', '#5f6368', '#d93025'];
+  var colours = [THEME.gold, THEME.navy, THEME.navy, THEME.muted, THEME.muted, '#9B2C22'];
   order.forEach(function (name, idx) {
     var sh = ss.getSheetByName(name);
     ss.setActiveSheet(sh); ss.moveActiveSheet(idx + 1); sh.setTabColor(colours[idx]);
@@ -398,132 +400,344 @@ function sheetLetters_(sh) {
 function addStatusColors_(ld, lc) {
   var col = colLetter_(lc['Status'] + 1);
   var range = ld.getRange(2, 1, ld.getMaxRows() - 1, ld.getLastColumn());
-  var colours = [[STATUS.REPLIED, '#d9ead3'], [STATUS.BOUNCED, '#f4cccc'],
-                 [STATUS.UNSUB, '#e0e0e0'], [STATUS.SKIPPED, '#e0e0e0'], [STATUS.NEEDS, '#fce8b2'],
-                 [STATUS.DONE, '#e8f0fe']];
-  var rules = colours.map(function (c) {
+  var colours = [STATUS.REPLIED, STATUS.BOUNCED, STATUS.UNSUB, STATUS.SKIPPED, STATUS.NEEDS, STATUS.DONE];
+  var rules = colours.map(function (st) {
     return SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=$' + col + '2="' + c[0] + '"')
-      .setBackground(c[1]).setRanges([range]).build();
+      .whenFormulaSatisfied('=$' + col + '2="' + st + '"')
+      .setBackground(STATUS_STYLE[st][0]).setFontColor(STATUS_STYLE[st][1]).setRanges([range]).build();
   });
   ld.setConditionalFormatRules(rules);
 }
 
+// ---------------------------------------------------------------- look and feel
+
+var BRAND = { name: 'Paramount Orbit Scouting Centre', credit: 'Designed by D\'XLNTInnovator' };
+var THEME = { navy: '#0B1530', navy2: '#13204A', gold: '#C9A227', gold2: '#E8C766', ivory: '#FBF8F1',
+  line: '#E7DFC9', ink: '#1D2333', muted: '#6B7189', track: '#EFE8D3', soft: '#C7CCE0',
+  good: '#2E7D5B', bad: '#B3261E', head: 'Playfair Display', body: 'Montserrat' };
+var STATUS_STYLE = {
+  'New': ['#EEF1FA', '#13204A'], 'Needs message': ['#FCF1D6', '#7A5C00'],
+  'In sequence': ['#E3E8F7', '#13204A'], 'Completed': ['#F6F0DC', '#7A5C00'],
+  'Replied': ['#DCEFE4', '#1E6B45'], 'Bounced': ['#F7DEDA', '#9B2C22'],
+  'Unsubscribed': ['#ECECEC', '#555555'], 'Do not contact': ['#ECECEC', '#555555']
+};
+var LOGO_PNG_B64 = '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';
+
+// Outreach -> About (uses the loader's first spare slot, so no new loader is needed)
+function slot1() {
+  alert_(BRAND.name + '\n\nVersion ' + CORE_VERSION + '\n\n' + BRAND.credit);
+}
+
+// The Dashboard is rebuilt from scratch every time Set up / repair runs. It holds no data.
+// Layout: margin A, then four 3-column cards (B-D, F-H, J-L, N-P) with thin gaps (E, I, M).
+// Hidden column S holds the calculations the cards show.
 function buildDashboard_(ss) {
-  var d = ss.getSheetByName(SHEET.DASH) || ss.insertSheet(SHEET.DASH);
-  d.getCharts().forEach(function (c) { d.removeChart(c); });
-  d.clear();
+  var old = ss.getSheetByName(SHEET.DASH);
+  var d = ss.insertSheet(SHEET.DASH + ' (building)', 0);
+  if (old) ss.deleteSheet(old);
+  d.setName(SHEET.DASH);
+
+  var T = THEME;
   var V = function (label) { return 'VLOOKUP("' + label + '",Settings!$A:$B,2,FALSE)'; };
   var Lt = sheetLetters_(ss.getSheetByName(SHEET.LEADS));
   var It = sheetLetters_(ss.getSheetByName(SHEET.INBOXES));
   var LC = function (h) { return 'Leads!$' + Lt[h] + ':$' + Lt[h]; };
   var LC2 = function (h) { return 'Leads!$' + Lt[h] + '$2:$' + Lt[h]; };
   var IC2 = function (h) { return 'Inboxes!$' + It[h] + '$2:$' + It[h]; };
+  var LOG = function (ev, today) {
+    return 'COUNTIFS(Log!$D:$D,"' + ev + '"' + (today ? ',Log!$A:$A,">="&TODAY()' : '') + ')';
+  };
 
-  d.getRange('A1').setFormula('="📧 "&' + V('Campaign name'))
-    .setFontSize(18).setFontWeight('bold');
-  d.getRange('A2').setValue('Live numbers from the Log, Leads and Inboxes tabs. ' +
-    'Do not type in this tab: "Set up / repair" rebuilds it.').setFontColor('#5f6368');
+  // page
+  var ROWS = 110, COLS = 19;
+  if (d.getMaxRows() > ROWS) d.deleteRows(ROWS + 1, d.getMaxRows() - ROWS);
+  if (d.getMaxColumns() > COLS) d.deleteColumns(COLS + 1, d.getMaxColumns() - COLS);
+  d.setHiddenGridlines(true);
+  d.getRange(1, 1, ROWS, COLS).setBackground(T.ivory).setFontFamily(T.body).setFontSize(10)
+    .setFontColor(T.ink).setVerticalAlignment('middle');
+  [24, 95, 95, 95, 16, 95, 95, 95, 16, 95, 95, 95, 16, 95, 95, 95, 24].forEach(function (w, i) { d.setColumnWidth(i + 1, w); });
+  d.hideColumns(18, 2);
 
-  var kpis = [
-    ['Goal (delivered messages)', '=' + V('Goal (delivered messages)'), '#,##0'],
-    ['Messages sent', '=COUNTIF(Log!$D:$D,"SENT*")', '#,##0'],
-    ['Bounced', '=COUNTIF(Log!$D:$D,"BOUNCE")', '#,##0'],
-    ['Delivered (sent minus bounced)', '=B5-B6', '#,##0'],
-    ['Progress to goal', '=IFERROR(B7/B4,0)', '0.0%'],
-    ['Still needed', '=MAX(0,B4-B7)', '#,##0'],
-    ['Days left', '=MAX(0,INT(' + V('Campaign start date') + ')+' + V('Campaign length (days)') + '-TODAY())', '0'],
-    ['Needed per day to hit goal', '=IF(B10=0,B9,ROUNDUP(B9/B10))', '#,##0'],
-    ['Sent today', '=COUNTIFS(Log!$D:$D,"SENT*",Log!$A:$A,">="&TODAY())', '#,##0'],
-    ['Bounce rate (keep under 2%)', '=IFERROR(B6/B5,0)', '0.0%'],
-    ['Leads contacted', '=COUNTIF(Log!$D:$D,"SENT_1")', '#,##0'],
-    ['Replies', '=COUNTIF(Log!$D:$D,"REPLY")+COUNTIF(Log!$D:$D,"UNSUB")', '#,##0'],
-    ['Reply rate', '=IFERROR(B15/B14,0)', '0.0%'],
-    ['Interested', '=COUNTIF(' + LC('Outcome') + ',"Interested")', '#,##0'],
-    ['Meetings booked', '=COUNTIF(' + LC('Outcome') + ',"Meeting booked")', '#,##0'],
-    ['Active inboxes', '=COUNTIF(' + IC2('Status') + ',"Active")', '0'],
-    ['Daily capacity at full speed', '=ARRAYFORMULA(SUM(IF(' + IC2('Status') + '="Active",IF(' + IC2('Daily Limit') + '="",' +
-      V('Default daily limit per inbox') + ',' + IC2('Daily Limit') + '),0)))', '#,##0']
+  // calculations (hidden column S)
+  var calc = [
+    ['goal', '=' + V('Goal (delivered messages)')],
+    ['start', '=INT(' + V('Campaign start date') + ')'],
+    ['length', '=' + V('Campaign length (days)')],
+    ['sentAll', '=' + LOG('SENT*')], ['sentToday', '=' + LOG('SENT*', 1)],
+    ['firstAll', '=' + LOG('SENT_1')], ['firstToday', '=' + LOG('SENT_1', 1)],
+    ['fuAll', '=' + LOG('SENT_FU*')], ['fuToday', '=' + LOG('SENT_FU*', 1)],
+    ['replyAll', '=' + LOG('REPLY') + '+' + LOG('UNSUB')], ['replyToday', '=' + LOG('REPLY', 1) + '+' + LOG('UNSUB', 1)],
+    ['bounceAll', '=' + LOG('BOUNCE')], ['bounceToday', '=' + LOG('BOUNCE', 1)],
+    ['unsubAll', '=' + LOG('UNSUB')],
+    ['delivered', '=MAX(0,{sentAll}-{bounceAll})'],
+    ['progress', '=IFERROR(MIN(1,{delivered}/{goal}),0)'],
+    ['toGo', '=MAX(0,{goal}-{delivered})'],
+    ['dayNum', '=MAX(1,MIN({length},TODAY()-{start}+1))'],
+    ['daysLeft', '=MAX(0,{start}+{length}-TODAY())'],
+    ['needed', '=IF({daysLeft}=0,{toGo},ROUNDUP({toGo}/{daysLeft}))'],
+    ['replyRate', '=IFERROR({replyAll}/{firstAll},0)'],
+    ['bounceRate', '=IFERROR({bounceAll}/{sentAll},0)'],
+    ['bounceRateToday', '=IFERROR({bounceToday}/{sentToday},0)'],
+    ['interested', '=COUNTIF(' + LC('Outcome') + ',"Interested")'],
+    ['meetings', '=COUNTIF(' + LC('Outcome') + ',"Meeting booked")'],
+    ['customers', '=COUNTIF(' + LC('Outcome') + ',"Customer")'],
+    ['leads', '=COUNTA(' + LC2('Email') + ')'],
+    ['waiting', '=COUNTIF(' + LC('Status') + ',"New")'],
+    ['inSeq', '=COUNTIF(' + LC('Status') + ',"In sequence")'],
+    ['completed', '=COUNTIF(' + LC('Status') + ',"Completed")'],
+    ['activeInboxes', '=COUNTIF(' + IC2('Status') + ',"Active")'],
+    ['inboxes', '=COUNTA(' + IC2('Inbox Email') + ')'],
+    ['capacity', '=ARRAYFORMULA(SUM(IF(' + IC2('Status') + '="Active",IF(' + IC2('Daily Limit') + '="",' +
+      V('Default daily limit per inbox') + ',' + IC2('Daily Limit') + '),0)))'],
+    ['dnc', '=COUNTA(\'Do Not Contact\'!$A$2:$A)'],
+    ['campaign', '=' + V('Campaign name')]
   ];
-  d.getRange('A3:B3').setValues([['Campaign', '']]).setFontWeight('bold').setBackground('#e8f0fe');
-  kpis.forEach(function (k, i) {
-    var r = 4 + i;
-    d.getRange(r, 1).setValue(k[0]);
-    d.getRange(r, 2).setFormula(k[1]).setNumberFormat(k[2]).setFontWeight('bold');
-  });
+  var at = {};
+  calc.forEach(function (c, i) { at[c[0]] = '$S$' + (i + 1); });
+  var X = function (f) { return f.replace(/\{(\w+)\}/g, function (m, k) { return at[k]; }); };
+  d.getRange(1, 18, calc.length, 2).setValues(calc.map(function (c) { return [c[0], '']; }));
+  d.getRange(1, 19, calc.length, 1).setFormulas(calc.map(function (c) { return [X(c[1])]; }));
 
-  d.getRange('D3:E3').setValues([['Leads by status', 'Count']]).setFontWeight('bold').setBackground('#e8f0fe');
-  d.getRange('D4').setValue('Total leads');
-  d.getRange('E4').setFormula('=COUNTA(' + LC2('Email') + ')').setFontWeight('bold');
-  STATUS_LIST.forEach(function (s, i) {
-    d.getRange(5 + i, 4).setValue(s);
-    d.getRange(5 + i, 5).setFormula('=COUNTIF(' + LC('Status') + ',"' + s + '")');
-  });
-  d.getRange(5 + STATUS_LIST.length, 4).setValue('No inbox assigned');
-  d.getRange(5 + STATUS_LIST.length, 5).setFormula(
-    '=COUNTIFS(' + LC2('Email') + ',"<>",' + LC2('Assigned Inbox') + ',"")');
+  // header band
+  [[1, 10], [2, 46], [3, 26], [4, 12], [5, 4], [6, 18]].forEach(function (h) { d.setRowHeight(h[0], h[1]); });
+  d.getRange(1, 1, 4, 17).setBackground(T.navy);
+  d.getRange(5, 1, 1, 17).setBackground(T.gold);
+  d.getRange('C2:L2').merge().setValue(BRAND.name).setFontFamily(T.head).setFontSize(24)
+    .setFontWeight('bold').setFontColor('#FFFFFF').setVerticalAlignment('bottom');
+  d.getRange('C3:L3').merge().setFormula(X('=UPPER({campaign})&"   ·   DAY "&{dayNum}&" OF "&{length}'))
+    .setFontColor(T.gold2).setFontWeight('bold').setFontSize(9).setVerticalAlignment('top');
+  d.getRange('N2:P2').merge().setValue('TODAY').setFontColor(T.soft).setFontSize(8)
+    .setHorizontalAlignment('right').setVerticalAlignment('bottom');
+  d.getRange('N3:P3').merge().setFormula('=TEXT(TODAY(),"ddd d mmm yyyy")').setFontColor(T.gold2)
+    .setFontWeight('bold').setFontSize(12).setHorizontalAlignment('right').setVerticalAlignment('top');
+  try {
+    var img = d.insertImage(Utilities.newBlob(Utilities.base64Decode(LOGO_PNG_B64), 'image/png', 'logo.png'), 2, 1);
+    img.setHeight(74).setWidth(71).setAnchorCellXOffset(10).setAnchorCellYOffset(8);
+  } catch (e) { /* the logo is a nice-to-have */ }
 
-  var top = 23;
-  var heads = ['Day', 'Date', 'Messages sent', 'First emails', 'Follow-ups', 'Bounces', 'Replies'];
-  d.getRange(top, 1, 1, heads.length).setValues([heads]).setFontWeight('bold').setBackground('#e8f0fe');
-  d.getRange(top - 1, 1).setValue('Day by day').setFontWeight('bold').setFontSize(12);
+  // cards
+  var COLS4 = [2, 6, 10, 14];
+  var num = '#,##0', pct = '0.0%';
+  var bar = function (frac, colour) {
+    return '=SPARKLINE(MIN(1,MAX(0,IFERROR(' + frac + ',0))),{"charttype","bar";"max",1;"color1",' +
+      (colour || '"' + T.gold + '"') + '})';
+  };
+  var section = function (row, title) {
+    d.setRowHeight(row, 30);
+    d.getRange(row, 2, 1, 15).setBorder(null, null, true, null, null, null, T.gold, SpreadsheetApp.BorderStyle.SOLID);
+    d.getRange(row, 2).setValue(title).setFontFamily(T.head).setFontSize(13).setFontWeight('bold')
+      .setFontColor(T.navy).setVerticalAlignment('bottom');
+  };
+  var cardRow = function (row, cards) {
+    [[0, 24], [1, 44], [2, 22], [3, 12], [4, 10], [5, 14]].forEach(function (h) { d.setRowHeight(row + h[0], h[1]); });
+    cards.forEach(function (c, i) {
+      var col = COLS4[i], dark = !!c.dark;
+      var box = d.getRange(row, col, 5, 3);
+      box.setBackground(dark ? T.navy : '#FFFFFF').setHorizontalAlignment('center');
+      box.setBorder(true, true, true, true, null, null, dark ? T.navy : T.line, SpreadsheetApp.BorderStyle.SOLID);
+      d.getRange(row, col, 1, 3).setBorder(true, null, null, null, null, null, T.gold, SpreadsheetApp.BorderStyle.SOLID_THICK);
+      d.getRange(row, col, 1, 3).merge().setValue(c.label.toUpperCase()).setFontSize(8).setFontWeight('bold')
+        .setFontColor(dark ? T.soft : T.muted).setVerticalAlignment('bottom');
+      d.getRange(row + 1, col, 1, 3).merge().setFormula(X(c.value)).setNumberFormat(c.fmt || num)
+        .setFontFamily(T.head).setFontSize(26).setFontWeight('bold').setFontColor(dark ? T.gold2 : T.navy);
+      d.getRange(row + 2, col, 1, 3).merge().setFormula(X(c.sub)).setFontSize(9)
+        .setFontColor(dark ? T.soft : T.muted).setVerticalAlignment('top');
+      var b = d.getRange(row + 3, col + 0, 1, 3).merge();
+      if (c.bar) b.setFormula(X(c.bar)).setBackground(dark ? '#2A3760' : T.track);
+    });
+  };
+
+  section(7, 'Today');
+  cardRow(8, [
+    { label: 'Sent today', value: '={sentToday}', sub: '="Needed per day: "&TEXT({needed},"#,##0")', bar: bar('{sentToday}/{needed}') },
+    { label: 'Replies today', value: '={replyToday}', sub: '="Replies in total: "&TEXT({replyAll},"#,##0")' },
+    { label: 'Bounces today', value: '={bounceToday}', sub: '="Bounce rate today: "&TEXT({bounceRateToday},"0.0%")' },
+    { label: 'New people contacted today', value: '={firstToday}', sub: '="Follow-ups sent today: "&TEXT({fuToday},"#,##0")' }
+  ]);
+  section(14, 'All time');
+  cardRow(15, [
+    { label: 'Delivered', dark: true, value: '={delivered}', sub: '="of "&TEXT({goal},"#,##0")&" goal  ·  "&TEXT({progress},"0%")&"  ·  "&TEXT({toGo},"#,##0")&" to go"', bar: bar('{progress}') },
+    { label: 'Sent in total', value: '={sentAll}', sub: '="First emails "&TEXT({firstAll},"#,##0")&"  ·  Follow-ups "&TEXT({fuAll},"#,##0")' },
+    { label: 'Replies in total', value: '={replyAll}', sub: '="Unsubscribed: "&TEXT({unsubAll},"#,##0")' },
+    { label: 'Bounces in total', value: '={bounceAll}', sub: '="Bounce rate "&TEXT({bounceRate},"0.0%")&"  ·  keep under 2%"',
+      bar: bar('{bounceRate}/0.05', 'IF({bounceRate}>=0.02,"' + T.bad + '","' + T.good + '")') }
+  ]);
+  section(21, 'Results');
+  cardRow(22, [
+    { label: 'Reply rate', value: '={replyRate}', fmt: pct, sub: '=TEXT({replyAll},"#,##0")&" replies from "&TEXT({firstAll},"#,##0")&" people"', bar: bar('{replyRate}/0.1') },
+    { label: 'Interested', value: '={interested}', sub: '="Customers: "&TEXT({customers},"#,##0")' },
+    { label: 'Meetings booked', value: '={meetings}', sub: '="From the Outcome column"' },
+    { label: 'Do not contact', value: '={dnc}', sub: '="Never emailed again"' }
+  ]);
+  section(28, 'Pipeline');
+  cardRow(29, [
+    { label: 'Leads in total', value: '={leads}', sub: '="Waiting to start: "&TEXT({waiting},"#,##0")' },
+    { label: 'In sequence', value: '={inSeq}', sub: '="Completed: "&TEXT({completed},"#,##0")' },
+    { label: 'Days left', value: '={daysLeft}', sub: '="Day "&{dayNum}&" of "&{length}&"  ·  need "&TEXT({needed},"#,##0")&" a day"', bar: bar('{dayNum}/{length}') },
+    { label: 'Active Gmails', value: '={activeInboxes}&" of "&{inboxes}', sub: '="Capacity: "&TEXT({capacity},"#,##0")&" emails a day"', bar: bar('{activeInboxes}/{inboxes}') }
+  ]);
+
+  // panel helper
+  var panel = function (row, col, width, title) {
+    d.setRowHeight(row, 32);
+    d.getRange(row, col, 1, width).merge().setValue('  ' + title).setBackground(T.navy).setFontColor('#FFFFFF')
+      .setFontFamily(T.head).setFontSize(13).setFontWeight('bold')
+      .setBorder(null, null, true, null, null, null, T.gold, SpreadsheetApp.BorderStyle.SOLID_THICK);
+  };
+  var colHead = function (row, cells) {
+    cells.forEach(function (c) {
+      var r = d.getRange(row, c[0], 1, c[2] || 1);
+      if ((c[2] || 1) > 1) r.merge();
+      r.setValue(c[1]).setFontSize(8).setFontWeight('bold').setFontColor(T.muted).setBackground('#FFFFFF')
+        .setHorizontalAlignment(c[3] || 'center');
+    });
+  };
+
+  // leads by status (B-H) and results by angle (J-P)
+  var P = 36;
+  panel(P, 2, 7, 'Leads by Status');
+  panel(P, 10, 7, 'Results by Angle');
+  d.getRange(P + 1, 2, 1, 7).setBackground('#FFFFFF');
+  d.getRange(P + 1, 10, 1, 7).setBackground('#FFFFFF');
+  colHead(P + 1, [[2, 'STATUS', 3], [5, '', 1], [6, 'LEADS', 1], [7, 'SHARE', 2]]);
+  colHead(P + 1, [[10, 'ANGLE', 2, 'left'], [12, 'EMAILED'], [13, ''], [14, 'REPLIES'], [15, 'REPLY %'], [16, 'POSITIVE']]);
+  var statusRows = STATUS_LIST.concat(['No Gmail assigned', 'Total leads']);
+  statusRows.forEach(function (st, i) {
+    var r = P + 2 + i;
+    d.setRowHeight(r, 24);
+    d.getRange(r, 2, 1, 7).setBackground(i % 2 ? T.ivory : '#FFFFFF');
+    var lab = d.getRange(r, 2, 1, 3).merge().setValue(st).setHorizontalAlignment('center');
+    var f;
+    if (st === 'No Gmail assigned') f = '=COUNTIFS(' + LC2('Email') + ',"<>",' + LC2('Assigned Inbox') + ',"")';
+    else if (st === 'Total leads') f = X('={leads}');
+    else f = '=COUNTIF(' + LC('Status') + ',"' + st + '")';
+    d.getRange(r, 6).setFormula(f).setNumberFormat(num).setFontWeight('bold').setHorizontalAlignment('center');
+    d.getRange(r, 7, 1, 2).merge().setFormula(X('=IF({leads}=0,"",SPARKLINE(F' + r + '/{leads},{"charttype","bar";"max",1;"color1","' + T.gold + '"}))'))
+      .setBackground(T.track);
+    if (STATUS_STYLE[st]) lab.setBackground(STATUS_STYLE[st][0]).setFontColor(STATUS_STYLE[st][1]).setFontWeight('bold');
+    if (st === 'Total leads') d.getRange(r, 2, 1, 7).setFontWeight('bold').setBorder(true, null, null, null, null, null, T.line, SpreadsheetApp.BorderStyle.SOLID);
+  });
+  var lastStatusRow = P + 1 + statusRows.length;
+  d.getRange(P + 1, 2, statusRows.length + 1, 7).setBorder(true, true, true, true, null, null, T.line, SpreadsheetApp.BorderStyle.SOLID);
+
+  var VAR = 'INDEX(Leads!$A:$BZ,0,MATCH("Variant",Leads!$1:$1,0))';
+  d.getRange(P + 2, 10).setFormula('=IFERROR(SORT(UNIQUE(FILTER(' + VAR + ',' + VAR + '<>"",' + VAR + '<>"Variant"))),"")');
+  for (var ar = P + 2; ar <= lastStatusRow; ar++) {
+    var A = '$J' + ar;
+    d.getRange(ar, 10, 1, 7).setBackground((ar - P) % 2 ? T.ivory : '#FFFFFF');
+    d.getRange(ar, 12, 1, 5).setFormulas([[
+      '=IF(' + A + '="","",COUNTIFS(' + VAR + ',' + A + ',' + LC('Emails Sent') + ',">0"))', '',
+      '=IF(' + A + '="","",COUNTIFS(' + VAR + ',' + A + ',' + LC('Status') + ',"Replied")+COUNTIFS(' + VAR + ',' + A + ',' + LC('Status') + ',"Unsubscribed"))',
+      '=IF(' + A + '="","",IFERROR(N' + ar + '/L' + ar + ',0))',
+      '=IF(' + A + '="","",COUNTIFS(' + VAR + ',' + A + ',' + LC('Outcome') + ',"Interested")+COUNTIFS(' + VAR + ',' + A + ',' + LC('Outcome') + ',"Meeting booked"))'
+    ]]).setHorizontalAlignment('center');
+    d.getRange(ar, 15).setNumberFormat(pct).setFontWeight('bold');
+  }
+  d.getRange(P + 1, 10, statusRows.length + 1, 7).setBorder(true, true, true, true, null, null, T.line, SpreadsheetApp.BorderStyle.SOLID);
+  d.getRange(lastStatusRow + 1, 10, 1, 7).merge().setValue('Judge an angle only after about 100 leads emailed with it. Positive = interested + meetings.')
+    .setFontStyle('italic').setFontSize(8).setFontColor(T.muted);
+
+  // day by day
+  var top = lastStatusRow + 3;
+  panel(top, 2, 15, 'Day by Day');
+  d.getRange(top + 1, 2, 1, 15).setBackground('#FFFFFF');
+  colHead(top + 1, [[2, 'DAY'], [3, 'DATE'], [4, 'SENT'], [6, 'FIRST EMAILS'], [7, 'FOLLOW-UPS'], [8, 'REPLIES'],
+    [10, 'BOUNCES'], [11, 'SENT PER DAY', 6]]);
   var rows = [];
   for (var n = 0; n < 30; n++) {
-    var r = top + 1 + n;
+    var r = top + 2 + n;
     var cnt = function (ev) {
-      return '=IF($B' + r + '="","",COUNTIFS(Log!$D:$D,"' + ev + '",Log!$A:$A,">="&$B' + r +
-        ',Log!$A:$A,"<"&($B' + r + '+1)))';
+      return '=IF($C' + r + '="","",COUNTIFS(Log!$D:$D,"' + ev + '",Log!$A:$A,">="&$C' + r + ',Log!$A:$A,"<"&($C' + r + '+1)))';
     };
     rows.push([
-      '=IF(' + n + '<' + V('Campaign length (days)') + ',' + (n + 1) + ',"")',
-      '=IF($A' + r + '="","",INT(' + V('Campaign start date') + ')+' + n + ')',
-      cnt('SENT*'), cnt('SENT_1'),
-      '=IF($B' + r + '="","",C' + r + '-D' + r + ')',
-      cnt('BOUNCE'),
-      '=IF($B' + r + '="","",COUNTIFS(Log!$D:$D,"REPLY",Log!$A:$A,">="&$B' + r + ',Log!$A:$A,"<"&($B' + r +
-        '+1))+COUNTIFS(Log!$D:$D,"UNSUB",Log!$A:$A,">="&$B' + r + ',Log!$A:$A,"<"&($B' + r + '+1)))'
+      X('=IF(' + n + '<{length},' + (n + 1) + ',"")'),
+      X('=IF($B' + r + '="","",{start}+' + n + ')'),
+      cnt('SENT*'), '', cnt('SENT_1'), cnt('SENT_FU*'),
+      '=IF($C' + r + '="","",COUNTIFS(Log!$D:$D,"REPLY",Log!$A:$A,">="&$C' + r + ',Log!$A:$A,"<"&($C' + r + '+1))+COUNTIFS(Log!$D:$D,"UNSUB",Log!$A:$A,">="&$C' + r + ',Log!$A:$A,"<"&($C' + r + '+1)))',
+      '', cnt('BOUNCE'),
+      '=IF($C' + r + '="","",SPARKLINE($D' + r + ',{"charttype","bar";"max",MAX(1,MAX($D$' + (top + 2) + ':$D$' + (top + 31) + '));"color1","' + T.gold + '"}))'
     ]);
   }
-  d.getRange(top + 1, 1, rows.length, heads.length).setFormulas(rows);
-  d.getRange(top + 1, 2, rows.length, 1).setNumberFormat('ddd mmm d');
-
-  // Results by angle (which email approach works best)
-  var VAR = 'INDEX(Leads!$A:$BZ,0,MATCH("Variant",Leads!$1:$1,0))';
-  var at = 22, ac = 9; // starts at I22
-  d.getRange(at - 1, ac).setValue('Results by angle').setFontWeight('bold').setFontSize(12);
-  var aHeads = ['Angle', 'Leads emailed', 'Replies', 'Reply rate', 'Interested + meetings', 'Positive rate'];
-  d.getRange(at, ac, 1, aHeads.length).setValues([aHeads]).setFontWeight('bold').setBackground('#e8f0fe');
-  d.getRange(at + 1, ac).setFormula('=IFERROR(SORT(UNIQUE(FILTER(' + VAR + ',' + VAR + '<>"",' + VAR + '<>"Variant"))),"")');
-  var aRows = [];
-  for (var ar = at + 1; ar <= at + 10; ar++) {
-    var A = '$I' + ar;
-    aRows.push([
-      '=IF(' + A + '="","",COUNTIFS(' + VAR + ',' + A + ',' + LC('Emails Sent') + ',">0"))',
-      '=IF(' + A + '="","",COUNTIFS(' + VAR + ',' + A + ',' + LC('Status') + ',"Replied")+COUNTIFS(' + VAR + ',' + A + ',' + LC('Status') + ',"Unsubscribed"))',
-      '=IF(' + A + '="","",IFERROR(K' + ar + '/J' + ar + ',0))',
-      '=IF(' + A + '="","",COUNTIFS(' + VAR + ',' + A + ',' + LC('Outcome') + ',"Interested")+COUNTIFS(' + VAR + ',' + A + ',' + LC('Outcome') + ',"Meeting booked"))',
-      '=IF(' + A + '="","",IFERROR(M' + ar + '/J' + ar + ',0))'
-    ]);
+  d.getRange(top + 2, 2, 30, 10).setFormulas(rows).setHorizontalAlignment('center');
+  for (var k = 0; k < 30; k++) {
+    var rr = top + 2 + k;
+    d.setRowHeight(rr, 22);
+    d.getRange(rr, 2, 1, 15).setBackground(k % 2 ? T.ivory : '#FFFFFF');
+    d.getRange(rr, 11, 1, 6).merge();
   }
-  d.getRange(at + 1, ac + 1, aRows.length, 5).setFormulas(aRows);
-  d.getRange(at + 1, ac + 3, aRows.length, 1).setNumberFormat('0.0%');
-  d.getRange(at + 1, ac + 5, aRows.length, 1).setNumberFormat('0.0%');
-  d.getRange(at + 11, ac).setValue('Judge an angle only after about 100 leads emailed with it.')
-    .setFontColor('#5f6368').setFontStyle('italic');
-  d.setColumnWidth(ac, 180);
+  d.getRange(top + 2, 3, 30, 1).setNumberFormat('ddd d mmm');
+  d.getRange(top + 2, 4, 30, 1).setFontWeight('bold');
+  d.getRange(top + 1, 2, 31, 15).setBorder(true, true, true, true, null, null, T.line, SpreadsheetApp.BorderStyle.SOLID);
 
-  d.setColumnWidth(1, 260); d.setColumnWidth(2, 120); d.setColumnWidth(3, 120);
-  d.setColumnWidth(4, 180);
-
+  // chart
+  var chartRow = top + 34;
   var chart = d.newChart().asColumnChart()
-    .addRange(d.getRange(top, 2, 1 + 30, 2))
-    .addRange(d.getRange(top, 7, 1 + 30, 1))
+    .addRange(d.getRange(top + 1, 3, 31, 1))
+    .addRange(d.getRange(top + 1, 4, 31, 1))
+    .addRange(d.getRange(top + 1, 8, 31, 1))
     .setNumHeaders(1)
-    .setOption('title', 'Messages sent and replies per day')
-    .setOption('legend', { position: 'bottom' })
-    .setPosition(3, 7, 0, 0)
+    .setOption('title', 'Sent and replies per day')
+    .setOption('titleTextStyle', { color: T.navy, fontName: T.head, fontSize: 14, bold: true })
+    .setOption('colors', [T.navy, T.gold])
+    .setOption('backgroundColor', T.ivory)
+    .setOption('legend', { position: 'bottom', textStyle: { color: T.muted, fontName: T.body } })
+    .setOption('hAxis', { textStyle: { color: T.muted, fontName: T.body } })
+    .setOption('vAxis', { textStyle: { color: T.muted, fontName: T.body }, gridlines: { color: T.line } })
+    .setOption('width', 1170).setOption('height', 300)
+    .setPosition(chartRow, 2, 0, 0)
     .build();
   d.insertChart(chart);
+
+  // footer with the credit
+  var foot = chartRow + 16;
+  d.setRowHeight(foot - 1, 18);
+  d.setRowHeight(foot, 36);
+  d.getRange(foot, 2, 1, 15).setBackground(T.navy)
+    .setBorder(true, null, null, null, null, null, T.gold, SpreadsheetApp.BorderStyle.SOLID_THICK);
+  d.getRange(foot, 2, 1, 7).merge().setValue('  ' + BRAND.name.toUpperCase() + '   ·   v' + CORE_VERSION)
+    .setFontColor(T.gold2).setFontSize(8).setFontWeight('bold');
+  d.getRange(foot, 10, 1, 7).merge().setValue(BRAND.credit + '  ').setFontFamily(T.head).setFontStyle('italic')
+    .setFontSize(11).setFontColor(T.gold2).setHorizontalAlignment('right');
+  if (d.getMaxRows() > foot + 2) d.deleteRows(foot + 3, d.getMaxRows() - foot - 2);
+}
+
+// Navy and gold header row, body font and alternating rows for a data tab.
+function styleDataTab_(sh, opts) {
+  opts = opts || {};
+  var T = THEME;
+  var width = Math.max(1, sh.getLastColumn());
+  sh.getRange(1, 1, sh.getMaxRows(), width).setFontFamily(T.body).setFontSize(10);
+  sh.getRange(1, 1, 1, width).setBackground(T.navy).setFontColor('#FFFFFF').setFontWeight('bold')
+    .setVerticalAlignment('middle')
+    .setBorder(null, null, true, null, null, null, T.gold, SpreadsheetApp.BorderStyle.SOLID_THICK);
+  sh.setRowHeight(1, 32);
+  sh.getBandings().forEach(function (b) { b.remove(); });
+  if (opts.banding !== false && sh.getMaxRows() > 1) {
+    sh.getRange(2, 1, sh.getMaxRows() - 1, width)
+      .applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, false, false)
+      .setFirstRowColor('#FFFFFF').setSecondRowColor(T.ivory);
+  }
+  if (opts.hideGrid) sh.setHiddenGridlines(true);
+}
+
+// Applies the theme to every tab (the Dashboard styles itself).
+function styleTabs_(ss) {
+  var T = THEME;
+  [[SHEET.LEADS, {}], [SHEET.INBOXES, { hideGrid: true }], [SHEET.LOG, {}], [SHEET.DNC, {}],
+   [TEAM.OVERVIEW, { hideGrid: true }], [TEAM.ALERTS, {}], [TEAM.HISTORY, {}]].forEach(function (t) {
+    var sh = ss.getSheetByName(t[0]);
+    if (sh) styleDataTab_(sh, t[1]);
+  });
+  var st = ss.getSheetByName(SHEET.SETTINGS);
+  if (st) {
+    styleDataTab_(st, { banding: false, hideGrid: true });
+    var n = Math.max(2, st.getLastRow());
+    st.getRange(2, 1, n - 1, 1).setFontWeight('bold').setFontColor(T.navy);
+    st.getRange(2, 2, n - 1, 1).setBackground('#FFF9E6').setFontColor(T.ink)
+      .setBorder(true, true, true, true, true, false, T.line, SpreadsheetApp.BorderStyle.SOLID);
+    st.getRange(2, 3, n - 1, 1).setFontStyle('italic').setFontColor(T.muted).setFontSize(9);
+    for (var r = 2; r <= n; r++) st.setRowHeight(r, 28);
+  }
 }
 
 // ---------------------------------------------------------------- import: upload a lead file
@@ -535,7 +749,8 @@ function showUploadDialog() {
   var options = allInboxes_(ss).map(function (i) {
     return '<option value="' + i + '">' + i + '</option>';
   }).join('');
-  var html = HtmlService.createHtmlOutput(UPLOAD_HTML_.replace('{{OPTIONS}}', options))
+  var html = HtmlService.createHtmlOutput(UPLOAD_HTML_.replace('{{OPTIONS}}', options)
+      .replace('{{LOGO}}', LOGO_PNG_B64).replace('{{BRAND}}', BRAND.name).replace('{{CREDIT}}', BRAND.credit))
     .setWidth(680).setHeight(600);
   try {
     SpreadsheetApp.getUi().showModalDialog(html, 'Upload a lead file');
@@ -569,16 +784,21 @@ function importLeadText(text, inbox, name) {
 
 var UPLOAD_HTML_ = [
   '<style>',
-  'body{font-family:Arial,sans-serif;font-size:14px;color:#222;margin:0;padding:2px 6px}',
-  'h3{margin:14px 0 6px;font-size:15px}',
+  '@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Montserrat:wght@400;600;700&display=swap");',
+  'body{font-family:Montserrat,Arial,sans-serif;font-size:14px;color:#1D2333;margin:0;padding:0 6px;background:#FBF8F1}',
+  '.top{background:#0B1530;border-bottom:3px solid #C9A227;margin:0 -6px 6px;padding:10px 14px;display:flex;align-items:center;gap:12px}',
+  '.top img{height:42px}.top b{font-family:"Playfair Display",serif;color:#fff;font-size:18px}',
+  '.credit{margin:14px 0 4px;text-align:right;font-family:"Playfair Display",serif;font-style:italic;color:#9A7B1A;font-size:12px}',
+  'h3{margin:14px 0 6px;font-size:14px;color:#0B1530;letter-spacing:.3px}',
   'textarea{width:100%;box-sizing:border-box;height:100px;font-family:monospace;font-size:12px}',
   'select{font-size:14px;padding:6px;max-width:100%}',
-  '.btn{background:#1a73e8;color:#fff;border:0;border-radius:4px;padding:9px 18px;font-size:14px;cursor:pointer}',
-  '.btn:disabled{background:#9bb8e8}',
+  '.btn{background:#0B1530;color:#E8C766;border:1px solid #C9A227;border-radius:3px;padding:9px 18px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}',
+  '.btn:disabled{background:#6B7189;color:#eee}',
   '.ok{color:#188038;white-space:nowrap}.bad{color:#c5221f;font-weight:bold;white-space:normal}',
-  '.box{border:1px solid #ddd;border-radius:6px;padding:10px;margin-top:10px;background:#fafafa;white-space:pre-wrap}',
+  '.box{border:1px solid #E7DFC9;border-top:3px solid #C9A227;padding:10px;margin-top:10px;background:#fff;white-space:pre-wrap}',
   '.hint{color:#666;margin:6px 0}',
   '</style>',
+  '<div class="top"><img src="data:image/png;base64,{{LOGO}}"><b>{{BRAND}}</b></div>',
   '<h3>1. Choose your lead file</h3>',
   '<input type="file" id="file" accept=".csv,.tsv,.txt,text/csv">',
   '<div class="hint">or paste the CSV text, or rows copied from a sheet (with the header row), here:</div>',
@@ -588,6 +808,7 @@ var UPLOAD_HTML_ = [
   '<div class="hint">A Send From column in the file wins over this choice.</div>',
   '<p><button class="btn" id="check" onclick="check()">Check file</button></p>',
   '<div id="out"></div>',
+  '<div class="credit">{{CREDIT}}</div>',
   '<script>',
   'var fileText = "", fileName = "";',
   'document.getElementById("file").addEventListener("change", function (e) {',
@@ -1410,6 +1631,7 @@ function teamSetup_(ss) {
     sh.setColumnWidth(4, 380);
     sh.getRange('D:D').setWrap(true);
     sh.setFrozenColumns(1);
+    styleDataTab_(sh, { hideGrid: true });
   }
   ensureSheet_(ss, TEAM.ALERTS, TEAM_ALERT_HEADERS).setColumnWidth(4, 420);
   ensureSheet_(ss, TEAM.HISTORY, TEAM_HISTORY_HEADERS);
