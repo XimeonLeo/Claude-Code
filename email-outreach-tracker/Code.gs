@@ -35,7 +35,7 @@ if (typeof OUTREACH_CONFIG === 'object' && OUTREACH_CONFIG) {
 
 // Change this every time you publish a new version, so you can see who has it
 // (Outreach -> Which Gmail am I using?).
-var CORE_VERSION = '2026-10-24';
+var CORE_VERSION = '2026-10-25';
 
 // ---------------------------------------------------------------- admins
 // Only these Gmails can use "Outreach -> Admin: watch team sheets".
@@ -1411,7 +1411,11 @@ function runForInbox_() {
         continue;
       }
 
-      var step = (Number(lead[lc['Emails Sent']]) || 0) + 1;
+      // A lead marked New always starts from the first email, even if its row still holds
+      // numbers from an old lead (rows pasted over, or a lead set back to New).
+      var leadStatus = String(lead[lc['Status']] || '').trim();
+      var isFresh = leadStatus === STATUS.NEW || leadStatus === '';
+      var step = isFresh ? 1 : (Number(lead[lc['Emails Sent']]) || 0) + 1;
       var vars = leadVars_(lead, lc, inbox.name);
       var text = messageFor_(lead, lc, step, st);
       if (!text) {
@@ -1421,6 +1425,7 @@ function runForInbox_() {
         } else {
           // no follow-up text for this step: the sequence ends here
           updateLead_(ld, lc, leadId, idx + 1, { 'Status': STATUS.DONE, 'Next Send': '' });
+          log_(ss, me, email, 'COMPLETED', leadId, 'No text for email ' + step + ', sequence ended', '', '');
         }
         continue;
       }
@@ -1428,7 +1433,7 @@ function runForInbox_() {
       var subject = step === 1
         ? render_(String(lead[lc['Subject']] || '').trim() || st.defSubject, vars)
         : 'Re: ' + String(lead[lc['Subject']] || '').replace(/^re:\s*/i, '');
-      var prevIds = String(lead[lc['Message IDs']] || '').trim();
+      var prevIds = step === 1 ? '' : String(lead[lc['Message IDs']] || '').trim();
 
       try {
         var res = sendEmail_({
@@ -1440,7 +1445,11 @@ function runForInbox_() {
         var up = { 'Emails Sent': step, 'Thread ID': res.threadId,
                    'Message IDs': (prevIds + ' ' + res.messageIdHeader).trim() };
         up[SENT_COLS[step - 1]] = at;
-        if (step === 1) up['Subject'] = subject;
+        if (step === 1) {
+          up['Subject'] = subject;
+          up['Follow-up 1 Sent'] = '';   // clear dates left over from an old lead in this row
+          up['Follow-up 2 Sent'] = '';
+        }
         if (step < maxSteps) {
           up['Status'] = STATUS.ACTIVE;
           up['Next Send'] = addDays_(at, step === 1 ? st.fu1Days : st.fu2Days);
