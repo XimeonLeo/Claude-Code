@@ -35,7 +35,7 @@ if (typeof OUTREACH_CONFIG === 'object' && OUTREACH_CONFIG) {
 
 // Change this every time you publish a new version, so you can see who has it
 // (Outreach -> Which Gmail am I using?).
-var CORE_VERSION = '2026-10-23';
+var CORE_VERSION = '2026-10-24';
 
 // ---------------------------------------------------------------- admins
 // Only these Gmails can use "Outreach -> Admin: watch team sheets".
@@ -149,7 +149,16 @@ function onOpen() {
 
 // ---------------------------------------------------------------- setup
 
+// Google's Allow screen lets people untick some permissions. If any are missing, this brings
+// the Allow screen back (tick "Select all") instead of failing halfway through.
+function askAllPermissions_() {
+  if (typeof ScriptApp !== 'undefined' && ScriptApp && typeof ScriptApp.requireAllScopes === 'function') {
+    ScriptApp.requireAllScopes(ScriptApp.AuthMode.FULL);
+  }
+}
+
 function setupSheet() {
+  askAllPermissions_();
   var ss = ss_();
   // Check the header rows first. If they look wrong, stop before changing anything.
   var problem = headerProblems_(ss);
@@ -451,6 +460,7 @@ function loadTheme_(ss) {
 
 // Outreach -> Apply colour theme (uses the loader's second spare slot)
 function slot2() {
+  askAllPermissions_();
   var ss = ss_();
   loadTheme_(ss);
   buildDashboard_(ss);
@@ -821,6 +831,7 @@ function styleTabs_(ss) {
 
 // Opens a small window: pick a CSV file (or paste the text), choose a Gmail, check, import.
 function showUploadDialog() {
+  askAllPermissions_();
   var ss = ss_();
   if (!ss.getSheetByName(SHEET.LEADS)) return alert_('Run Outreach -> 1. Set up this sheet first.');
   var options = allInboxes_(ss).map(function (i) {
@@ -1161,6 +1172,7 @@ function importSummary_(res) {
 }
 
 function rebalanceLeads() {
+  askAllPermissions_();
   var ss = ss_();
   var inboxes = activeInboxes_(ss);
   if (!inboxes.length) return alert_('No Active inboxes on the Inboxes tab yet.');
@@ -1219,6 +1231,7 @@ function rebalanceLeads() {
 // ---------------------------------------------------------------- connect
 
 function connectInbox() {
+  askAllPermissions_();
   var ui = ui_();
   var me = me_();
   if (!me) return alert_('Could not tell which Gmail you are using. Open this sheet in a browser window where only that Gmail is signed in.');
@@ -1263,6 +1276,7 @@ function connectInbox() {
 }
 
 function disconnectInbox() {
+  askAllPermissions_();
   var ss = ss_();
   var me = me_();
   var n = 0;
@@ -1294,7 +1308,7 @@ function viaLoader_() {
 
 function runForMe() { runAndRecord_(); }
 
-function runNow() { alert_(runAndRecord_()); }
+function runNow() { askAllPermissions_(); alert_(runAndRecord_()); }
 
 // Runs one round and writes what happened into the Inboxes tab (Last Result),
 // so you can always see why a Gmail did or did not send.
@@ -1318,6 +1332,7 @@ function runAndRecord_() {
 }
 
 function checkNow() {
+  askAllPermissions_();
   var ss = ss_();
   requireGmailService_();
   var st = readSettings_(ss);
@@ -1561,6 +1576,7 @@ function checkInbox_(ss, me, st) {
 // ---------------------------------------------------------------- test email
 
 function sendTestEmail() {
+  askAllPermissions_();
   requireGmailService_();
   var ss = ss_();
   var me = me_();
@@ -1668,6 +1684,7 @@ function notAdmin_() {
 }
 
 function addTeamSheet() {
+  askAllPermissions_();
   if (notAdmin_()) return;
   var ui = SpreadsheetApp.getUi();
   var ss = ss_();
@@ -1683,10 +1700,11 @@ function addTeamSheet() {
   alert_(refreshTeam_());
 }
 
-function refreshTeam() { if (notAdmin_()) return; alert_(refreshTeam_()); }
+function refreshTeam() { askAllPermissions_(); if (notAdmin_()) return; alert_(refreshTeam_()); }
 function refreshTeamAuto() { if (isAdmin_()) refreshTeam_(); }
 
 function teamAutoOn() {
+  askAllPermissions_();
   if (notAdmin_()) return;
   teamAutoOff_();
   ScriptApp.newTrigger('refreshTeamAuto').timeBased().everyHours(2).create();

@@ -17,7 +17,7 @@ var CODE_URL = 'https://drive.google.com/file/d/1W5Ap33DTLvVwo05_U4hX3YNDnrgAmXr
 
 // ------------------------------------------------------------- do not change below this line
 
-var LOADER_VERSION = 3;
+var LOADER_VERSION = 4;
 var CHECK_EVERY_MINUTES = 60;
 var ENTRY_POINTS = ['onOpen', 'setupSheet', 'showUploadDialog', 'previewLeadText', 'importLeadText',
   'rebalanceLeads', 'connectInbox', 'disconnectInbox', 'whoAmI', 'runForMe', 'runNow', 'checkNow',
@@ -58,9 +58,15 @@ function slot10() { return run_('slot10', arguments); }
 
 // Outreach -> Check for updates now
 function updateNow() {
+  // Google's Allow screen lets people untick permissions; if any are missing, show it again.
+  if (typeof ScriptApp.requireAllScopes === 'function') ScriptApp.requireAllScopes(ScriptApp.AuthMode.FULL);
   var res = download_(true);
   var msg = res.ok ? 'You have the latest version: ' + res.version + '.'
                    : 'Could not update: ' + res.error + '\n\nThe sheet keeps working with the version it already has.';
+  if (!res.ok && /permission/i.test(res.error)) {
+    msg = 'Google is missing one of the permissions this script needs (it was unticked on the Allow screen).\n\n' +
+      'Fix: Extensions -> Apps Script -> choose updateNow at the top -> Run -> on the Google screen tick "Select all" -> Allow.';
+  }
   try { SpreadsheetApp.getUi().alert(msg); } catch (e) { console.log(msg); }
 }
 
