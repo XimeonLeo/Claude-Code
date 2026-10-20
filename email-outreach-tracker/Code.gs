@@ -35,7 +35,7 @@ if (typeof OUTREACH_CONFIG === 'object' && OUTREACH_CONFIG) {
 
 // Change this every time you publish a new version, so you can see who has it
 // (Outreach -> Which Gmail am I using?).
-var CORE_VERSION = '2026-10-27';
+var CORE_VERSION = '2026-10-28';
 
 // ---------------------------------------------------------------- admins
 // Only these Gmails can use "Outreach -> Admin: watch team sheets".
@@ -116,7 +116,7 @@ var SETTINGS_DEF = [
   { key: 'defFu2', label: 'Default follow-up 2 (if a lead has none)', value: 'Hi {{first_name|there}}, I will not keep filling your inbox, so this is my last note. If this is ever a priority, just reply and I will send details.', note: 'Only used when the lead has no Follow-up 2 Message. Leave blank to skip.' },
   { key: 'optOut', label: 'Opt-out line', value: 'P.S. Not relevant? Just reply "no" and I won\'t email you again.', note: 'Added to the end of every email. Leave blank for none.' },
   { key: 'paused', label: 'Pause everything', value: false, note: 'Set TRUE to stop all sending right away.' },
-  { key: 'theme', label: 'Colour theme', value: 'Navy & Gold', note: 'Navy & Gold, Emerald & Gold or Burgundy & Gold. Then click Outreach -> Apply colour theme.' }
+  { key: 'theme', label: 'Colour theme', value: 'Navy & Gold', note: 'Navy & Gold, Emerald & Gold, Burgundy & Gold, Notion Style or ClickUp Style. Then click Outreach -> Apply colour theme.' }
 ];
 
 // ---------------------------------------------------------------- menu
@@ -328,7 +328,6 @@ function settingsRules_(st) {
     length: function () { return dv().requireNumberBetween(1, 365).setHelpText('Number of days, e.g. 11'); },
     dailyLimit: function () { return dv().requireNumberBetween(1, 50).setHelpText('1 to 50. Free Gmail: keep it at 35 or less'); },
     rampStart: function () { return dv().requireNumberBetween(0, 50).setHelpText('0 to 50, e.g. 20 (blank = no warm-up)'); },
-    rampStep: function () { return dv().requireNumberBetween(0, 20).setHelpText('0 to 20, e.g. 5'); },
     followUps: function () { return dv().requireNumberBetween(0, 2).setHelpText('0, 1 or 2'); },
     fu1Days: function () { return dv().requireNumberBetween(1, 30).setHelpText('1 to 30 days, e.g. 3'); },
     fu2Days: function () { return dv().requireNumberBetween(1, 30).setHelpText('1 to 30 days, e.g. 4'); },
@@ -336,7 +335,6 @@ function settingsRules_(st) {
     endHour: function () { return dv().requireNumberBetween(1, 24).setHelpText('An hour from 1 to 24, e.g. 18'); },
     minDelay: function () { return dv().requireNumberBetween(0, 600).setHelpText('Seconds, 0 to 600, e.g. 20'); },
     maxDelay: function () { return dv().requireNumberBetween(0, 600).setHelpText('Seconds, 0 to 600, e.g. 60'); },
-    bouncePause: function () { return dv().requireNumberBetween(0.01, 0.2).setHelpText('1% to 20%, e.g. 5%'); },
     theme: function () { return dv().requireValueInList(THEME_NAMES, true); }
   };
   labels.forEach(function (l, i) {
@@ -348,6 +346,8 @@ function settingsRules_(st) {
       cell.setDataValidation(dv().requireCheckbox().build());
     } else if (rules[def.key]) {
       cell.setDataValidation(rules[def.key]().build());
+    } else {
+      cell.clearDataValidations();   // settings with no rule (e.g. warm-up increase, bounce pause) accept any value
     }
   });
 }
@@ -585,13 +585,21 @@ var BRAND = { name: 'Paramount Orbit Scouting Centre', credit: 'Designed by D\'X
 var THEMES = {
   'Navy & Gold':     { navy: '#0B1530', navy2: '#13204A', ivory: '#FBF8F1', line: '#E7DFC9', muted: '#6B7189', soft: '#C7CCE0', darkTrack: '#2A3760' },
   'Emerald & Gold':  { navy: '#0B3B2E', navy2: '#12513F', ivory: '#F8F6EF', line: '#E2DCC6', muted: '#5F6E68', soft: '#B9CFC6', darkTrack: '#1E5A48' },
-  'Burgundy & Gold': { navy: '#4A0F1D', navy2: '#64182A', ivory: '#FBF6F1', line: '#EBDCCF', muted: '#77646A', soft: '#D9BFC5', darkTrack: '#6E2335' }
+  'Burgundy & Gold': { navy: '#4A0F1D', navy2: '#64182A', ivory: '#FBF6F1', line: '#EBDCCF', muted: '#77646A', soft: '#D9BFC5', darkTrack: '#6E2335' },
+  // Clean and minimal: white page, charcoal text, light grey blocks, blue accent.
+  'Notion Style':    { navy: '#F7F6F3', navy2: '#EFEEEA', onNavy: '#37352F', ivory: '#FFFFFF', line: '#E9E9E7', muted: '#787774',
+                       soft: '#787774', darkTrack: '#E3E2E0', gold: '#2383E2', gold2: '#2383E2', paleGold: '#BCD9F5',
+                       track: '#EDEDEC', ink: '#37352F', head: 'Inter', body: 'Inter' },
+  // Bright and modern: purple bands, pink accents, light lavender page.
+  'ClickUp Style':   { navy: '#7B68EE', navy2: '#6A57E3', onNavy: '#FFFFFF', ivory: '#F7F8FC', line: '#E6E4F7', muted: '#6B6F80',
+                       soft: '#E4DFFF', darkTrack: '#9C8FF2', gold: '#FD71AF', gold2: '#FFD3E8', paleGold: '#FFC4DF',
+                       track: '#F1EEFD', ink: '#292D34', head: 'Poppins', body: 'Inter' }
 };
 var THEME_NAMES = Object.keys(THEMES);
 
 function themeFor_(name) {
   var base = { gold: '#C9A227', gold2: '#E8C766', paleGold: '#F1DFA4', ink: '#1D2333', track: '#EFE8D3',
-    good: '#2E7D5B', bad: '#B3261E', head: 'Playfair Display', body: 'Montserrat' };
+    good: '#2E7D5B', bad: '#B3261E', head: 'Playfair Display', body: 'Montserrat', onNavy: '#FFFFFF' };
   var want = normHeader_(name);
   var key = THEME_NAMES.filter(function (n) {
     var k = normHeader_(n);
@@ -599,6 +607,7 @@ function themeFor_(name) {
   })[0] || 'Navy & Gold';
   var t = THEMES[key];
   Object.keys(t).forEach(function (k) { base[k] = t[k]; });
+  base.strong = t.strong || (t.onNavy && t.onNavy !== '#FFFFFF' ? t.onNavy : t.navy); // headings and big numbers on white
   base.name = key;
   return base;
 }
@@ -718,7 +727,7 @@ function buildDashboard_(ss) {
   d.getRange(1, 1, 4, 17).setBackground(T.navy);
   d.getRange(5, 1, 1, 17).setBackground(T.gold);
   d.getRange('C2:L2').merge().setValue(BRAND.name).setFontFamily(T.head).setFontSize(24)
-    .setFontWeight('bold').setFontColor('#FFFFFF').setVerticalAlignment('bottom');
+    .setFontWeight('bold').setFontColor(T.onNavy).setVerticalAlignment('bottom');
   d.getRange('C3:L3').merge().setFormula(X('=UPPER({campaign})&"   ·   DAY "&{dayNum}&" OF "&{length}'))
     .setFontColor(T.gold2).setFontWeight('bold').setFontSize(9).setVerticalAlignment('top');
   d.getRange('N2:P2').merge().setValue('TODAY').setFontColor(T.soft).setFontSize(8)
@@ -741,7 +750,7 @@ function buildDashboard_(ss) {
     d.setRowHeight(row, 30);
     d.getRange(row, 2, 1, 15).setBorder(null, null, true, null, null, null, T.gold, SpreadsheetApp.BorderStyle.SOLID);
     d.getRange(row, 2).setValue(title).setFontFamily(T.head).setFontSize(13).setFontWeight('bold')
-      .setFontColor(T.navy).setVerticalAlignment('bottom');
+      .setFontColor(T.strong).setVerticalAlignment('bottom');
   };
   var cardRow = function (row, cards) {
     [[0, 24], [1, 44], [2, 22], [3, 12], [4, 10], [5, 14]].forEach(function (h) { d.setRowHeight(row + h[0], h[1]); });
@@ -754,7 +763,7 @@ function buildDashboard_(ss) {
       d.getRange(row, col, 1, 3).merge().setValue(c.label.toUpperCase()).setFontSize(8).setFontWeight('bold')
         .setFontColor(dark ? T.soft : T.muted).setVerticalAlignment('bottom');
       d.getRange(row + 1, col, 1, 3).merge().setFormula(X(c.value)).setNumberFormat(c.fmt || num)
-        .setFontFamily(T.head).setFontSize(26).setFontWeight('bold').setFontColor(dark ? T.gold2 : T.navy);
+        .setFontFamily(T.head).setFontSize(26).setFontWeight('bold').setFontColor(dark ? T.gold2 : T.strong);
       d.getRange(row + 2, col, 1, 3).merge().setFormula(X(c.sub)).setFontSize(9)
         .setFontColor(dark ? T.soft : T.muted).setVerticalAlignment('top');
       var b = d.getRange(row + 3, col + 0, 1, 3).merge();
@@ -769,7 +778,7 @@ function buildDashboard_(ss) {
     .setBorder(true, true, true, true, null, null, T.line, SpreadsheetApp.BorderStyle.SOLID);
   d.getRange(g0, 2, 1, 15).setBorder(true, null, null, null, null, null, T.gold, SpreadsheetApp.BorderStyle.SOLID_THICK);
   d.getRange(g0, 2, 1, 7).merge().setValue('  GOAL TRACKER').setFontFamily(T.head).setFontSize(13)
-    .setFontWeight('bold').setFontColor(T.navy);
+    .setFontWeight('bold').setFontColor(T.strong);
   d.getRange(g0, 10, 1, 7).merge().setHorizontalAlignment('right').setFontWeight('bold').setFontSize(10).setFormula(X(
     '=IF({delivered}>={goal},"🏆 Goal reached",IF({delivered}>={expected},"✅ On track: ahead by "&TEXT({delivered}-{expected},"#,##0"),' +
     '"⚠️ Behind by "&TEXT({expected}-{delivered},"#,##0")&": need "&TEXT({needed},"#,##0")&" a day"))&"  "'));
@@ -782,7 +791,7 @@ function buildDashboard_(ss) {
       .setFontSize(8).setFontColor(T.muted);
   });
   d.getRange(g0 + 3, 2, 1, 15).merge().setHorizontalAlignment('center').setFontFamily(T.head).setFontSize(15)
-    .setFontColor(T.navy).setFormula(X('=TEXT({delivered},"#,##0")&" of "&TEXT({goal},"#,##0")&" delivered   ·   "&' +
+    .setFontColor(T.strong).setFormula(X('=TEXT({delivered},"#,##0")&" of "&TEXT({goal},"#,##0")&" delivered   ·   "&' +
     'TEXT({progress},"0.0%")&"   ·   "&TEXT({toGo},"#,##0")&" to go   ·   day "&{dayNum}&" of "&{length}'));
   d.getRange(g0 + 4, 2, 1, 15).merge().setHorizontalAlignment('center').setFontSize(8).setFontColor(T.muted)
     .setValue('Gold = delivered so far.   Light gold = what should be done by today to finish on time.');
@@ -820,7 +829,7 @@ function buildDashboard_(ss) {
   // panel helper
   var panel = function (row, col, width, title) {
     d.setRowHeight(row, 32);
-    d.getRange(row, col, 1, width).merge().setValue('  ' + title).setBackground(T.navy).setFontColor('#FFFFFF')
+    d.getRange(row, col, 1, width).merge().setValue('  ' + title).setBackground(T.navy).setFontColor(T.onNavy)
       .setFontFamily(T.head).setFontSize(13).setFontWeight('bold')
       .setBorder(null, null, true, null, null, null, T.gold, SpreadsheetApp.BorderStyle.SOLID_THICK);
   };
@@ -947,7 +956,7 @@ function styleDataTab_(sh, opts) {
   var T = THEME;
   var width = Math.max(1, sh.getLastColumn());
   sh.getRange(1, 1, sh.getMaxRows(), width).setFontFamily(T.body).setFontSize(10);
-  sh.getRange(1, 1, 1, width).setBackground(T.navy).setFontColor('#FFFFFF').setFontWeight('bold')
+  sh.getRange(1, 1, 1, width).setBackground(T.navy).setFontColor(T.onNavy).setFontWeight('bold')
     .setVerticalAlignment('middle')
     .setBorder(null, null, true, null, null, null, T.gold, SpreadsheetApp.BorderStyle.SOLID_THICK);
   sh.setRowHeight(1, 32);
@@ -972,7 +981,7 @@ function styleTabs_(ss) {
   if (st) {
     styleDataTab_(st, { banding: false, hideGrid: true });
     var n = Math.max(2, st.getLastRow());
-    st.getRange(2, 1, n - 1, 1).setFontWeight('bold').setFontColor(T.navy);
+    st.getRange(2, 1, n - 1, 1).setFontWeight('bold').setFontColor(T.strong);
     st.getRange(2, 2, n - 1, 1).setBackground('#FFF9E6').setFontColor(T.ink)
       .setBorder(true, true, true, true, true, false, T.line, SpreadsheetApp.BorderStyle.SOLID);
     st.getRange(2, 3, n - 1, 1).setFontStyle('italic').setFontColor(T.muted).setFontSize(9);
@@ -993,6 +1002,8 @@ function showUploadDialog() {
   loadTheme_(ss);
   var html = HtmlService.createHtmlOutput(UPLOAD_HTML_.replace('{{OPTIONS}}', options)
       .replace(/#0B1530/g, THEME.navy).replace(/#FBF8F1/g, THEME.ivory)
+      .replace('color:#fff;font-size:18px', 'color:' + THEME.onNavy + ';font-size:18px')
+      .replace(/#E8C766/g, THEME.gold2).replace(/#C9A227/g, THEME.gold)
       .replace('{{LOGO}}', LOGO_PNG_B64).replace('{{BRAND}}', BRAND.name).replace('{{CREDIT}}', BRAND.credit))
     .setWidth(680).setHeight(600);
   try {
@@ -2078,20 +2089,20 @@ function buildLeaderboard_(ss, board, now) {
   sh.getRange(1, 1, 2, W).setBackground(T.navy);
   sh.setRowHeight(1, 44); sh.setRowHeight(2, 26);
   sh.getRange(1, 1, 1, W).merge().setValue('  🏆  Leaderboard').setFontFamily(T.head).setFontSize(22)
-    .setFontWeight('bold').setFontColor('#FFFFFF').setVerticalAlignment('bottom');
+    .setFontWeight('bold').setFontColor(T.onNavy).setVerticalAlignment('bottom');
   sh.getRange(2, 1, 1, W).merge().setValue('   Updated ' + Utilities.formatDate(now, ss.getSpreadsheetTimeZone(), 'EEE d MMM yyyy, HH:mm') +
     '   ·   ranked by total emails sent, then replies   ·   ' + BRAND.name)
     .setFontColor(T.gold2).setFontSize(9).setFontWeight('bold').setVerticalAlignment('top');
   sh.getRange(3, 1, 1, W).setBackground(T.gold);
   sh.setRowHeight(3, 4);
 
-  sh.getRange(4, 1, 1, W).setValues([heads]).setBackground(T.navy2).setFontColor('#FFFFFF').setFontWeight('bold')
+  sh.getRange(4, 1, 1, W).setValues([heads]).setBackground(T.navy2).setFontColor(T.onNavy).setFontWeight('bold')
     .setFontSize(9).setHorizontalAlignment('center').setVerticalAlignment('middle');
   sh.setRowHeight(4, 30);
   if (rows.length) {
     var body = sh.getRange(5, 1, rows.length, W);
     body.setValues(rows).setFontFamily(T.body).setFontSize(11).setHorizontalAlignment('center').setVerticalAlignment('middle');
-    sh.getRange(5, 2, rows.length, 1).setHorizontalAlignment('left').setFontWeight('bold').setFontColor(T.navy);
+    sh.getRange(5, 2, rows.length, 1).setHorizontalAlignment('left').setFontWeight('bold').setFontColor(T.strong);
     sh.getRange(5, 6, rows.length, 1).setFontWeight('bold');
     for (var i = 0; i < rows.length; i++) {
       sh.setRowHeight(5 + i, 30);
