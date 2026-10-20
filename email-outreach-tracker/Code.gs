@@ -35,7 +35,7 @@ if (typeof OUTREACH_CONFIG === 'object' && OUTREACH_CONFIG) {
 
 // Change this every time you publish a new version, so you can see who has it
 // (Outreach -> Which Gmail am I using?).
-var CORE_VERSION = '2026-10-26';
+var CORE_VERSION = '2026-10-27';
 
 // ---------------------------------------------------------------- admins
 // Only these Gmails can use "Outreach -> Admin: watch team sheets".
@@ -124,6 +124,7 @@ var SETTINGS_DEF = [
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('📧 Outreach')
     .addItem('1. Set up / repair this sheet', 'setupSheet')
+    .addItem('Reset to default settings (keeps your leads)', 'slot3')
     .addSeparator()
     .addItem('Upload a lead file (CSV)', 'showUploadDialog')
     .addItem('Spread waiting leads across inboxes', 'rebalanceLeads')
@@ -188,6 +189,7 @@ function setupSheet() {
   st.setColumnWidth(1, 260); st.setColumnWidth(2, 420); st.setColumnWidth(3, 480);
   st.getRange('B:B').setWrap(true);
   st.getRange('A:A').setFontWeight('bold');
+  settingsRules_(st);
 
   // Inboxes (formulas are written after the Leads tab exists)
   ensureSheet_(ss, SHEET.LEADS, LEAD_HEADERS);
@@ -254,8 +256,157 @@ function setupSheet() {
   var blank = ss.getSheetByName('Sheet1');
   if (blank && blank.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(blank);
   ss.setActiveSheet(ss.getSheetByName(SHEET.DASH));
+  try { addGuards_(ss); } catch (e) { console.log('Guards: ' + e.message); }
 
   toast_('Sheet is ready. Next: check Settings, connect your Gmails, then import leads.');
+}
+
+// ---------------------------------------------------------------- reset and guards
+
+// Outreach -> Reset to default settings (keeps your leads). Uses the loader's third spare slot.
+var KEEP_ON_RESET = ['name', 'goal', 'start', 'length', 'theme'];
+
+function slot3() {
+  askAllPermissions_();
+  var ss = ss_();
+  var ui = ui_();
+  if (ui) {
+    var r = ui.alert('Reset to default settings?',
+      'This puts the sheet back to normal:\n\n' +
+      '•  Settings go back to the defaults. Your campaign name, goal, start date, length and colour theme stay.\n' +
+      '•  Hidden rows and columns are shown again, and filters are removed.\n' +
+      '•  Tabs, column names, formats, colours and the Dashboard are repaired.\n\n' +
+      'Your leads, emails sent, replies, Log, Gmails and Do Not Contact list are NOT touched.\n\nContinue?',
+      ui.ButtonSet.YES_NO);
+    if (r !== ui.Button.YES) return;
+  }
+  var problem = headerProblems_(ss);
+  if (problem) return alert_(problem);
+  var changed = resetSettings_(ss);
+  [SHEET.LEADS, SHEET.INBOXES, SHEET.LOG, SHEET.DNC, SHEET.SETTINGS].forEach(function (n) {
+    var sh = ss.getSheetByName(n);
+    if (!sh) return;
+    try { if (sh.getFilter()) sh.getFilter().remove(); } catch (e) { /* no filter */ }
+    try { sh.showRows(1, sh.getMaxRows()); sh.showColumns(1, sh.getMaxColumns()); } catch (e) { /* nothing hidden */ }
+  });
+  setupSheet();
+  log_(ss, me_(), '', 'RESET', '', 'Reset to default settings (' + changed + ' settings changed)', '', '');
+  alert_('Done. The sheet is back to its default settings (' + changed + ' setting' + (changed === 1 ? '' : 's') +
+    ' changed back), and everything is repaired.\n\nYour leads and results were not touched.');
+}
+
+// Puts every setting back to its default, except the ones in KEEP_ON_RESET. Returns how many changed.
+function resetSettings_(ss) {
+  var st = ss.getSheetByName(SHEET.SETTINGS);
+  if (!st || st.getLastRow() < 2) return 0;
+  var vals = st.getRange(2, 1, st.getLastRow() - 1, 2).getValues();
+  var seen = {}, changed = 0;
+  vals.forEach(function (row, i) {
+    var label = String(row[0]).trim();
+    var def = SETTINGS_DEF.filter(function (d) { return d.label === label; })[0];
+    if (!def || seen[label] || KEEP_ON_RESET.indexOf(def.key) >= 0) { seen[label] = true; return; }
+    seen[label] = true;
+    if (String(row[1]) !== String(def.value)) {
+      var cell = st.getRange(i + 2, 2);
+      cell.clearDataValidations();
+      cell.setValue(def.value);
+      changed++;
+    }
+  });
+  return changed;
+}
+
+// Input rules on Settings: wrong values are refused with a short explanation.
+function settingsRules_(st) {
+  var n = st.getLastRow();
+  if (n < 2) return;
+  var labels = st.getRange(2, 1, n - 1, 1).getValues();
+  var dv = function () { return SpreadsheetApp.newDataValidation().setAllowInvalid(false); };
+  var rules = {
+    goal: function () { return dv().requireNumberBetween(1, 1000000).setHelpText('A number, e.g. 5000'); },
+    start: function () { return dv().requireDate().setHelpText('A date, e.g. 2026-10-20'); },
+    length: function () { return dv().requireNumberBetween(1, 365).setHelpText('Number of days, e.g. 11'); },
+    dailyLimit: function () { return dv().requireNumberBetween(1, 50).setHelpText('1 to 50. Free Gmail: keep it at 35 or less'); },
+    rampStart: function () { return dv().requireNumberBetween(0, 50).setHelpText('0 to 50, e.g. 20 (blank = no warm-up)'); },
+    rampStep: function () { return dv().requireNumberBetween(0, 20).setHelpText('0 to 20, e.g. 5'); },
+    followUps: function () { return dv().requireNumberBetween(0, 2).setHelpText('0, 1 or 2'); },
+    fu1Days: function () { return dv().requireNumberBetween(1, 30).setHelpText('1 to 30 days, e.g. 3'); },
+    fu2Days: function () { return dv().requireNumberBetween(1, 30).setHelpText('1 to 30 days, e.g. 4'); },
+    startHour: function () { return dv().requireNumberBetween(0, 23).setHelpText('An hour from 0 to 23, e.g. 8'); },
+    endHour: function () { return dv().requireNumberBetween(1, 24).setHelpText('An hour from 1 to 24, e.g. 18'); },
+    minDelay: function () { return dv().requireNumberBetween(0, 600).setHelpText('Seconds, 0 to 600, e.g. 20'); },
+    maxDelay: function () { return dv().requireNumberBetween(0, 600).setHelpText('Seconds, 0 to 600, e.g. 60'); },
+    bouncePause: function () { return dv().requireNumberBetween(0.01, 0.2).setHelpText('1% to 20%, e.g. 5%'); },
+    theme: function () { return dv().requireValueInList(THEME_NAMES, true); }
+  };
+  labels.forEach(function (l, i) {
+    var def = SETTINGS_DEF.filter(function (d) { return d.label === String(l[0]).trim(); })[0];
+    if (!def) return;
+    var cell = st.getRange(i + 2, 2);
+    if (def.key === 'weekends' || def.key === 'paused') {
+      cell.setValue(toBool_(cell.getValue()));
+      cell.setDataValidation(dv().requireCheckbox().build());
+    } else if (rules[def.key]) {
+      cell.setDataValidation(rules[def.key]().build());
+    }
+  });
+}
+
+// Google's own "Are you sure?" warning on the parts nobody should edit by hand.
+// Warning only: people can still click OK, and the script itself is never blocked.
+function addGuards_(ss) {
+  var TAG = 'Outreach guard';
+  var drop = function (sh) {
+    if (!sh) return;
+    [SpreadsheetApp.ProtectionType.SHEET, SpreadsheetApp.ProtectionType.RANGE].forEach(function (type) {
+      sh.getProtections(type).forEach(function (p) {
+        if (String(p.getDescription()).indexOf(TAG) === 0 && p.canEdit()) p.remove();
+      });
+    });
+  };
+  var warn = function (target, what) {
+    var p = target.protect().setDescription(TAG + ': ' + what);
+    p.setWarningOnly(true);
+  };
+  var col = function (sh, h) {
+    var c = colMap_(sh)[h];
+    return c === undefined ? null : sh.getRange(1, c + 1, sh.getMaxRows(), 1);
+  };
+
+  var dash = ss.getSheetByName(SHEET.DASH);
+  if (dash) { drop(dash); warn(dash, 'the Dashboard is rebuilt by the script'); }
+  var log = ss.getSheetByName(SHEET.LOG);
+  if (log) { drop(log); warn(log, 'the Log is the record of everything sent'); }
+
+  var ld = ss.getSheetByName(SHEET.LEADS);
+  if (ld) {
+    drop(ld);
+    warn(ld.getRange(1, 1, 1, ld.getMaxColumns()), 'column names');
+    ['Lead ID', 'Emails Sent', 'Email 1 Sent', 'Follow-up 1 Sent', 'Follow-up 2 Sent', 'Replied At',
+     'Reply Snippet', 'Bounced At', 'Bounce Reason', 'Source', 'Imported At', 'Thread ID', 'Message IDs',
+     'Extra Fields'].forEach(function (h) {
+      var r = col(ld, h);
+      if (r) warn(r, h + ' is filled in by the script');
+    });
+  }
+  var ib = ss.getSheetByName(SHEET.INBOXES);
+  if (ib) {
+    drop(ib);
+    warn(ib.getRange(1, 1, 1, ib.getMaxColumns()), 'column names');
+    ['Connected', 'Last Run', 'Sent Today', 'Total Sent', 'Bounces', 'Bounce %', 'Replies', 'Reply %',
+     'Leads Assigned', 'Leads Waiting', 'Health', 'Last Result'].forEach(function (h) {
+      var r = col(ib, h);
+      if (r) warn(r, h + ' is filled in by the script');
+    });
+  }
+  var st = ss.getSheetByName(SHEET.SETTINGS);
+  if (st) {
+    drop(st);
+    warn(st.getRange(1, 1, 1, 3), 'column names');
+    warn(st.getRange(2, 1, st.getMaxRows() - 1, 1), 'setting names: change the values in column B only');
+  }
+  var dnc = ss.getSheetByName(SHEET.DNC);
+  if (dnc) { drop(dnc); warn(dnc.getRange(1, 1, 1, dnc.getMaxColumns()), 'column names'); }
 }
 
 // Columns that newer versions of the script add. Anything else missing from a header row
@@ -854,8 +1005,16 @@ function showUploadDialog() {
   }
 }
 
-// Called by the upload window: checks the file without importing anything.
-function previewLeadText(text) {
+// Called by the upload window: checks the files without importing anything.
+// Takes one text, or a list of { name, text } for several files at once.
+function previewLeadText(input) {
+  if (Array.isArray(input)) {
+    return { files: input.map(function (f) { var p = previewOne_(f.text); p.name = f.name; return p; }) };
+  }
+  return previewOne_(input);
+}
+
+function previewOne_(text) {
   var rows = leadRowsFromText_(text);
   if (rows.length < 2) {
     return { leads: 0, error: 'No leads found. The first line must be the column names, for example: Email,First Name,Company,...' };
@@ -864,14 +1023,24 @@ function previewLeadText(text) {
 }
 
 // Called by the upload window: imports the leads and returns the summary text.
-function importLeadText(text, inbox, name) {
+// Takes one text, or a list of { name, text } for several files at once.
+function importLeadText(input, inbox, name) {
   var ss = ss_();
-  var rows = leadRowsFromText_(text);
-  if (rows.length < 2) throw new Error('No leads found. The first line must be the column names.');
   inbox = normEmail_(inbox);
   if (inbox && allInboxes_(ss).indexOf(inbox) < 0) throw new Error(inbox + ' is not on the Inboxes tab.');
-  var source = (name || 'Upload') + ' ' + Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm');
-  return importSummary_(importRows_(ss, rows, source, inbox)) + gapsText_(checkLeadRows_(rows));
+  var files = Array.isArray(input) ? input : [{ name: name, text: input }];
+  var stamp = Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm');
+  var out = [], total = 0;
+  files.forEach(function (f, i) {
+    var rows = leadRowsFromText_(f.text);
+    var head = files.length > 1 ? 'FILE ' + (i + 1) + ' OF ' + files.length + ': ' + (f.name || 'Upload') + '\n' : '';
+    if (rows.length < 2) { out.push(head + 'No leads found in this file (the first line must be the column names). Skipped.'); return; }
+    var res = importRows_(ss, rows, (f.name || 'Upload') + ' ' + stamp, inbox);
+    total += res.imported;
+    out.push(head + importSummary_(res) + gapsText_(checkLeadRows_(rows)));
+  });
+  if (files.length > 1) out.unshift('TOTAL: ' + total + ' new leads from ' + files.length + ' files.');
+  return out.join('\n\n────────────\n\n');
 }
 
 var UPLOAD_HTML_ = [
@@ -891,46 +1060,66 @@ var UPLOAD_HTML_ = [
   '.hint{color:#666;margin:6px 0}',
   '</style>',
   '<div class="top"><img src="data:image/png;base64,{{LOGO}}"><b>{{BRAND}}</b></div>',
-  '<h3>1. Choose your lead file</h3>',
-  '<input type="file" id="file" accept=".csv,.tsv,.txt,text/csv">',
+  '<h3>1. Choose your lead files (one or several)</h3>',
+  '<input type="file" id="file" multiple accept=".csv,.tsv,.txt,text/csv">',
+  '<div class="hint">Hold Ctrl (Windows) or Cmd (Mac) to pick several files at once.</div>',
   '<div class="hint">or paste the CSV text, or rows copied from a sheet (with the header row), here:</div>',
   '<textarea id="paste" placeholder="Email,First Name,Last Name,Company,Subject,Message,Follow-up 1,Follow-up 2,..."></textarea>',
   '<h3>2. Which Gmail sends them?</h3>',
   '<select id="inbox"><option value="">Spread evenly across all Gmails</option>{{OPTIONS}}</select>',
   '<div class="hint">A Send From column in the file wins over this choice.</div>',
-  '<p><button class="btn" id="check" onclick="check()">Check file</button></p>',
+  '<p><button class="btn" id="check" onclick="check()">Check files</button></p>',
   '<div id="out"></div>',
   '<div class="credit">{{CREDIT}}</div>',
   '<script>',
-  'var fileText = "", fileName = "";',
+  'var files = [];',
   'document.getElementById("file").addEventListener("change", function (e) {',
-  '  var f = e.target.files[0]; if (!f) return;',
-  '  if (/\\.xlsx?$/i.test(f.name)) { show("<p class=bad>That is an Excel file. Open it in Google Sheets or Excel, choose File, Download, CSV, then pick the CSV here.</p>"); return; }',
-  '  var r = new FileReader();',
-  '  r.onload = function () { fileText = r.result; fileName = f.name; document.getElementById("paste").value = ""; show("<p>Loaded " + esc(f.name) + ". Click Check file.</p>"); };',
-  '  r.readAsText(f);',
+  '  var list = Array.prototype.slice.call(e.target.files || []);',
+  '  var excel = list.filter(function (f) { return /\\.xlsx?$/i.test(f.name); });',
+  '  list = list.filter(function (f) { return !/\\.xlsx?$/i.test(f.name); });',
+  '  files = []; if (!list.length && !excel.length) return;',
+  '  var left = list.length;',
+  '  var done = function () {',
+  '    var h = "<p>Loaded " + files.length + " file" + (files.length === 1 ? "" : "s") + ": " + files.map(function (f) { return esc(f.name); }).join(", ") + ". Click Check files.</p>";',
+  '    if (excel.length) h += "<p class=bad>Skipped Excel files (" + excel.map(function (f) { return esc(f.name); }).join(", ") + "). Open them in Google Sheets, then File, Download, CSV.</p>";',
+  '    show(h);',
+  '  };',
+  '  if (!left) { done(); return; }',
+  '  list.forEach(function (f) {',
+  '    var r = new FileReader();',
+  '    r.onload = function () { files.push({ name: f.name, text: r.result }); left--; if (!left) { document.getElementById("paste").value = ""; done(); } };',
+  '    r.readAsText(f);',
+  '  });',
   '});',
-  'function current() { var p = document.getElementById("paste").value; return p.trim() ? { text: p, name: "Pasted leads" } : { text: fileText, name: fileName || "Uploaded file" }; }',
+  'function current() { var p = document.getElementById("paste").value; return p.trim() ? [{ name: "Pasted leads", text: p }] : files; }',
   'function check() {',
-  '  var c = current(); if (!c.text.trim()) { show("<p class=bad>Choose a file or paste your leads first.</p>"); return; }',
-  '  busy(true, "Checking..."); google.script.run.withSuccessHandler(function (p) { busy(false); preview(p); }).withFailureHandler(fail).previewLeadText(c.text);',
+  '  var c = current(); if (!c.length) { show("<p class=bad>Choose your files or paste your leads first.</p>"); return; }',
+  '  busy(true, "Checking..."); google.script.run.withSuccessHandler(function (p) { busy(false); preview(p.files); }).withFailureHandler(fail).previewLeadText(c);',
   '}',
-  'function preview(p) {',
-  '  if (!p.leads) { show("<p class=bad>" + esc(p.error || "No leads with an email were found.") + "</p>"); return; }',
-  '  var h = "<div class=box><b>" + p.leads + " leads found.</b>\\n";',
-  '  p.columns.forEach(function (c) { h += (c.ok ? "<span class=ok>&#10004; " : "<span class=bad>&#10008; ") + esc(c.label) + "</span>   "; });',
-  '  if (p.gaps.length) h += "\\n\\nEmpty cells: " + p.gaps.map(function (g) { return esc(g.label) + " (" + g.count + ")"; }).join(", ");',
-  '  if (p.noEmail) h += "\\n" + p.noEmail + " rows have no email and will be skipped.";',
-  '  if (p.sample) h += "\\n\\nFirst lead: " + esc(p.sample);',
-  '  h += "</div>";',
-  '  if (p.missing.length) h += "<p class=bad>Missing columns: " + esc(p.missing.join(", ")) + ". Best fix: make the file again with the lead prompt (LEAD-PROMPT.txt).</p><p><button class=btn onclick=go()>Import anyway</button></p>";',
-  '  else h += "<p><button class=btn onclick=go()>Import " + p.leads + " leads</button></p>";',
+  'function preview(list) {',
+  '  var total = 0, missing = false, h = "";',
+  '  list.forEach(function (p) {',
+  '    h += "<div class=box><b>" + esc(p.name) + "</b>\\n";',
+  '    if (!p.leads) { h += "<span class=bad>" + esc(p.error || "No leads with an email were found.") + "</span></div>"; return; }',
+  '    total += p.leads;',
+  '    h += p.leads + " leads found.\\n";',
+  '    p.columns.forEach(function (c) { h += (c.ok ? "<span class=ok>&#10004; " : "<span class=bad>&#10008; ") + esc(c.label) + "</span>   "; });',
+  '    if (p.gaps.length) h += "\\nEmpty cells: " + p.gaps.map(function (g) { return esc(g.label) + " (" + g.count + ")"; }).join(", ");',
+  '    if (p.noEmail) h += "\\n" + p.noEmail + " rows have no email and will be skipped.";',
+  '    if (p.sample) h += "\\nFirst lead: " + esc(p.sample);',
+  '    if (p.missing.length) { missing = true; h += "\\n<span class=bad>Missing columns: " + esc(p.missing.join(", ")) + "</span>"; }',
+  '    h += "</div>";',
+  '  });',
+  '  if (!total) { show(h); return; }',
+  '  var label = "Import " + total + " leads" + (list.length > 1 ? " from " + list.length + " files" : "");',
+  '  if (missing) h += "<p class=bad>Some files are missing columns. Best fix: make them again with the lead prompt (LEAD-PROMPT.txt).</p><p><button class=btn onclick=go()>Import anyway</button></p>";',
+  '  else h += "<p><button class=btn onclick=go()>" + label + "</button></p>";',
   '  show(h);',
   '}',
   'function go() {',
   '  var c = current(); busy(true, "Importing... this can take a minute.");',
   '  google.script.run.withSuccessHandler(function (msg) { busy(false); show("<div class=box>" + esc(msg) + "</div><p><button class=btn onclick=google.script.host.close()>Close</button></p>"); })',
-  '    .withFailureHandler(fail).importLeadText(c.text, document.getElementById("inbox").value, c.name);',
+  '    .withFailureHandler(fail).importLeadText(c, document.getElementById("inbox").value);',
   '}',
   'function fail(e) { busy(false); show("<p class=bad>" + esc(e && e.message ? e.message : e) + "</p>"); }',
   'function busy(b, m) { document.getElementById("check").disabled = b; if (b) show("<p>" + m + "</p>"); }',
@@ -1772,6 +1961,7 @@ function refreshTeam_() {
   var todayStart = startOfToday_(ss);
   var histRows = [], alertRows = [];
   var counts = { ok: 0, check: 0, problem: 0 };
+  var board = [];
 
   rows.forEach(function (r) {
     var name = String(r[tc['Name']]).trim();
@@ -1795,6 +1985,7 @@ function refreshTeam_() {
       if (known.indexOf(f.key) < 0) alertRows.push([now, name, f.level === 'red' ? '🔴 Red' : '🟡 Check', f.text, f.how || '', id]);
     });
     var status = teamStatus_(res.flags);
+    if (res.stats) board.push({ name: name || '(no name)', stats: res.stats, status: status });
     counts[status === '🟢 OK' ? 'ok' : status === '🟡 Check' ? 'check' : 'problem']++;
     var set = function (h, v) { if (tc[h] !== undefined) r[tc[h]] = v; };
     set('Status', status);
@@ -1842,9 +2033,82 @@ function refreshTeam_() {
   sh.getRange(2, tc['Bounce %'] + 1, rows.length, 1).setNumberFormat('0.0%');
   sh.getRange(2, tc['Reply %'] + 1, rows.length, 1).setNumberFormat('0.0%');
   sh.getRange(2, tc['Last email sent'] + 1, rows.length, 2).setNumberFormat('yyyy-mm-dd hh:mm');
+  try { buildLeaderboard_(ss, board, now); } catch (e) { console.log('Leaderboard: ' + e.message); }
   return 'Checked ' + (counts.ok + counts.check + counts.problem) + ' team sheets: ' +
     counts.ok + ' OK, ' + counts.check + ' to check, ' + counts.problem + ' with problems.\n\n' +
-    (alertRows.length ? alertRows.length + ' new alerts were added to the Team Alerts tab.' : 'No new alerts.');
+    (alertRows.length ? alertRows.length + ' new alerts were added to the Team Alerts tab.' : 'No new alerts.') +
+    '\n\nThe Leaderboard tab is updated.';
+}
+
+// One tab that ranks everyone: most emails sent first, then most replies.
+function buildLeaderboard_(ss, board, now) {
+  loadTheme_(ss);
+  var T = THEME;
+  var sh = ss.getSheetByName('Leaderboard');
+  if (!sh) {
+    var team = ss.getSheetByName(TEAM.OVERVIEW);
+    sh = ss.insertSheet('Leaderboard', team ? team.getIndex() : 0);
+  }
+  sh.getBandings().forEach(function (b) { b.remove(); });
+  sh.clear();
+  try { sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).breakApart(); } catch (e) { /* nothing merged */ }
+  sh.setHiddenGridlines(true);
+  sh.setTabColor(T.gold);
+  var heads = ['Rank', 'Name', 'Leads', 'Sent today', 'Sent (7 days)', 'Total sent', 'Replies', 'Reply %',
+               'Bounces', 'Bounce %', 'Meetings', 'Status'];
+  var W = heads.length;
+  var widths = [70, 200, 90, 100, 110, 110, 90, 90, 90, 90, 100, 130];
+  widths.forEach(function (w, i) { sh.setColumnWidth(i + 1, w); });
+
+  board.sort(function (a, b) {
+    return (b.stats.totalSent - a.stats.totalSent) || (b.stats.replies - a.stats.replies);
+  });
+  var medal = ['🥇 1', '🥈 2', '🥉 3'];
+  var rows = board.map(function (e, i) {
+    var t = e.stats;
+    return [medal[i] || String(i + 1), e.name, t.leads || 0, t.sentToday, t.sent7, t.totalSent, t.replies,
+            t.replyPct, t.bounced || 0, t.bouncePct, t.meetings, e.status];
+  });
+  var sum = function (k) { return board.reduce(function (s, e) { return s + (Number(e.stats[k]) || 0); }, 0); };
+  var emailed = sum('emailed');
+  var totals = ['', 'TEAM TOTAL', sum('leads'), sum('sentToday'), sum('sent7'), sum('totalSent'), sum('replies'),
+                emailed ? sum('replies') / emailed : 0, sum('bounced'), emailed ? sum('bounced') / emailed : 0,
+                sum('meetings'), board.length + ' people'];
+
+  sh.getRange(1, 1, 2, W).setBackground(T.navy);
+  sh.setRowHeight(1, 44); sh.setRowHeight(2, 26);
+  sh.getRange(1, 1, 1, W).merge().setValue('  🏆  Leaderboard').setFontFamily(T.head).setFontSize(22)
+    .setFontWeight('bold').setFontColor('#FFFFFF').setVerticalAlignment('bottom');
+  sh.getRange(2, 1, 1, W).merge().setValue('   Updated ' + Utilities.formatDate(now, ss.getSpreadsheetTimeZone(), 'EEE d MMM yyyy, HH:mm') +
+    '   ·   ranked by total emails sent, then replies   ·   ' + BRAND.name)
+    .setFontColor(T.gold2).setFontSize(9).setFontWeight('bold').setVerticalAlignment('top');
+  sh.getRange(3, 1, 1, W).setBackground(T.gold);
+  sh.setRowHeight(3, 4);
+
+  sh.getRange(4, 1, 1, W).setValues([heads]).setBackground(T.navy2).setFontColor('#FFFFFF').setFontWeight('bold')
+    .setFontSize(9).setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sh.setRowHeight(4, 30);
+  if (rows.length) {
+    var body = sh.getRange(5, 1, rows.length, W);
+    body.setValues(rows).setFontFamily(T.body).setFontSize(11).setHorizontalAlignment('center').setVerticalAlignment('middle');
+    sh.getRange(5, 2, rows.length, 1).setHorizontalAlignment('left').setFontWeight('bold').setFontColor(T.navy);
+    sh.getRange(5, 6, rows.length, 1).setFontWeight('bold');
+    for (var i = 0; i < rows.length; i++) {
+      sh.setRowHeight(5 + i, 30);
+      sh.getRange(5 + i, 1, 1, W).setBackground(i < 3 ? ['#F6E7B8', '#EEF0F4', '#F3E3D3'][i] : (i % 2 ? T.ivory : '#FFFFFF'));
+    }
+    sh.getRange(5, 8, rows.length + 1, 1).setNumberFormat('0.0%');
+    sh.getRange(5, 10, rows.length + 1, 1).setNumberFormat('0.0%');
+    sh.getRange(5, 3, rows.length + 1, 5).setNumberFormat('#,##0');
+  }
+  var tr = 5 + rows.length;
+  sh.getRange(tr, 1, 1, W).setValues([totals]).setBackground(T.navy).setFontColor(T.gold2).setFontWeight('bold')
+    .setFontFamily(T.body).setFontSize(11).setHorizontalAlignment('center')
+    .setBorder(true, null, null, null, null, null, T.gold, SpreadsheetApp.BorderStyle.SOLID_THICK);
+  sh.setRowHeight(tr, 32);
+  sh.getRange(tr + 2, 1, 1, W).merge().setValue(BRAND.credit).setFontFamily(T.head).setFontStyle('italic')
+    .setFontColor(T.muted).setHorizontalAlignment('right');
+  sh.setFrozenRows(4);
 }
 
 function teamStatus_(flags) {
@@ -2000,7 +2264,8 @@ function analyzeTeam_(d, prev, now, todayStart) {
 
   return {
     flags: flags,
-    stats: { sentToday: sentToday, sent7: sent7, totalSent: s.totalSent, bouncePct: bouncePct,
+    stats: { leads: s.leads, bounced: s.bounced, emailed: s.emailed,
+             sentToday: sentToday, sent7: sent7, totalSent: s.totalSent, bouncePct: bouncePct,
              replies: s.replies, replyPct: s.emailed ? s.replies / s.emailed : 0, meetings: s.meetings,
              waiting: s.waiting, activeInboxes: active, inboxes: inboxes, lastSent: lastSent },
     snapshot: { leads: s.leads, waiting: s.waiting, totalSent: s.totalSent, logRows: logRows,

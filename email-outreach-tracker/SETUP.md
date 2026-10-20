@@ -98,7 +98,8 @@ Hourly sending keeps working; nothing else changes.
 2. **Check the emails.** Run the file through an email checker (e.g. MillionVerifier).
    Keep only **Deliverable**. Bounces get Gmails blocked.
 3. **Upload.** In the master sheet: **📧 Outreach → Upload a lead file (CSV)** →
-   choose the file → choose a Gmail (or "spread evenly") → **Check file** → **Import**.
+   choose the file (or **several files at once**: hold Ctrl or Cmd while clicking) → choose a Gmail
+   (or "spread evenly") → **Check files** → **Import**.
    No file? Paste the CSV text into the box instead.
 
 The upload skips duplicates, bad emails and anyone on Do Not Contact, and warns you
@@ -117,6 +118,14 @@ if a column is missing. If it says columns are missing, make the file again with
 
 **Never change row 1** (the column names) of Leads, Inboxes, Log or Do Not Contact. Don't rename, delete or move
 columns, and when you sort, use **Data → Sort range** with **"Data has header row"** ticked. The script finds everything by those names.
+
+**Mistake guards:** if you try to edit something the script fills in (the Dashboard, the Log, column names, sent
+dates and counts), Google asks **"Edit anyway?"**. Click **Cancel** unless you're sure. Settings refuse values
+that don't make sense (for example a daily limit of 500) and say what's allowed.
+
+**Something looks wrong?** **📧 Outreach → Reset to default settings (keeps your leads).** It puts the settings back
+to normal (your campaign name, goal, dates and colour theme stay), shows hidden rows and columns, removes filters
+and repairs the tabs. Leads, sends, replies, Gmails and Do Not Contact are never touched.
 
 ## The tabs
 
@@ -195,10 +204,11 @@ They must use `Loader.gs` and have clicked **Set up / repair** once.
    Repeat for each person. (Or type names in column A and links in column B of the **Team** tab.)
 3. **📧 Outreach → Admin: watch team sheets → Turn on automatic checks (every 2 hours).**
 
-You get three new tabs:
+You get four new tabs:
 
 | Tab | What it shows |
 |---|---|
+| **Leaderboard** | Everyone ranked in one place (most sent first, then most replies): leads, sent today, last 7 days, total sent, replies, reply %, bounces, bounce %, meetings, status, plus a team total. 🥇🥈🥉 for the top three. Updated with every check |
 | **Team** | One row per person: 🟢 OK / 🟡 Check / 🔴 Problem, what's wrong now, sent today, last 7 days, total, bounce %, replies, meetings, leads waiting, active Gmails, last email sent, and a link to open their dashboard |
 | **Team Alerts** | Every problem found, with the date and time and how to check it. It's kept even after they fix it |
 | **Team History** | Their numbers at every check, so you can see progress over time |
