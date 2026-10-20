@@ -35,7 +35,7 @@ if (typeof OUTREACH_CONFIG === 'object' && OUTREACH_CONFIG) {
 
 // Change this every time you publish a new version, so you can see who has it
 // (Outreach -> Which Gmail am I using?).
-var CORE_VERSION = '2026-10-28';
+var CORE_VERSION = '2026-10-29';
 
 // ---------------------------------------------------------------- admins
 // Only these Gmails can use "Outreach -> Admin: watch team sheets".
@@ -116,6 +116,7 @@ var SETTINGS_DEF = [
   { key: 'defFu2', label: 'Default follow-up 2 (if a lead has none)', value: 'Hi {{first_name|there}}, I will not keep filling your inbox, so this is my last note. If this is ever a priority, just reply and I will send details.', note: 'Only used when the lead has no Follow-up 2 Message. Leave blank to skip.' },
   { key: 'optOut', label: 'Opt-out line', value: 'P.S. Not relevant? Just reply "no" and I won\'t email you again.', note: 'Added to the end of every email. Leave blank for none.' },
   { key: 'paused', label: 'Pause everything', value: false, note: 'Set TRUE to stop all sending right away.' },
+  { key: 'layout', label: 'Dashboard layout', value: 'Classic', note: 'Classic, Executive, Scoreboard, Funnel, Inbox Command or Compact. Outreach -> Choose dashboard layout shows a preview of each.' },
   { key: 'theme', label: 'Colour theme', value: 'Navy & Gold', note: 'Navy & Gold, Emerald & Gold, Burgundy & Gold, Notion Style or ClickUp Style. Then click Outreach -> Apply colour theme.' }
 ];
 
@@ -136,6 +137,7 @@ function onOpen() {
     .addItem('Check replies & bounces now', 'checkNow')
     .addSeparator()
     .addItem('Which Gmail am I using?', 'whoAmI')
+    .addItem('Choose dashboard layout', 'slot4')
     .addItem('Apply colour theme', 'slot2')
     .addItem('About ' + BRAND.name, 'slot1')
     .addItem(viaLoader_() ? 'Check for updates now' : 'Version: ' + CORE_VERSION, viaLoader_() ? 'updateNow' : 'whoAmI')
@@ -264,7 +266,7 @@ function setupSheet() {
 // ---------------------------------------------------------------- reset and guards
 
 // Outreach -> Reset to default settings (keeps your leads). Uses the loader's third spare slot.
-var KEEP_ON_RESET = ['name', 'goal', 'start', 'length', 'theme'];
+var KEEP_ON_RESET = ['name', 'goal', 'start', 'length', 'theme', 'layout'];
 
 function slot3() {
   askAllPermissions_();
@@ -335,7 +337,8 @@ function settingsRules_(st) {
     endHour: function () { return dv().requireNumberBetween(1, 24).setHelpText('An hour from 1 to 24, e.g. 18'); },
     minDelay: function () { return dv().requireNumberBetween(0, 600).setHelpText('Seconds, 0 to 600, e.g. 20'); },
     maxDelay: function () { return dv().requireNumberBetween(0, 600).setHelpText('Seconds, 0 to 600, e.g. 60'); },
-    theme: function () { return dv().requireValueInList(THEME_NAMES, true); }
+    theme: function () { return dv().requireValueInList(THEME_NAMES, true); },
+    layout: function () { return dv().requireValueInList(LAYOUT_NAMES, true); }
   };
   labels.forEach(function (l, i) {
     var def = SETTINGS_DEF.filter(function (d) { return d.label === String(l[0]).trim(); })[0];
@@ -628,6 +631,7 @@ function slot2() {
   buildDashboard_(ss);
   styleTabs_(ss);
   colourTabs_(ss);
+  try { addGuards_(ss); } catch (e) { /* guards are a nice-to-have */ }
   ss.setActiveSheet(ss.getSheetByName(SHEET.DASH));
   alert_('Colour theme applied: ' + THEME.name + '.\n\nTo change it, pick another in Settings -> "Colour theme" and click this again.');
 }
@@ -672,14 +676,14 @@ function buildDashboard_(ss) {
   };
 
   // page
-  var ROWS = 120, COLS = 19;
+  var ROWS = 120, COLS = 23;
   if (d.getMaxRows() > ROWS) d.deleteRows(ROWS + 1, d.getMaxRows() - ROWS);
   if (d.getMaxColumns() > COLS) d.deleteColumns(COLS + 1, d.getMaxColumns() - COLS);
   d.setHiddenGridlines(true);
   d.getRange(1, 1, ROWS, COLS).setBackground(T.ivory).setFontFamily(T.body).setFontSize(10)
     .setFontColor(T.ink).setVerticalAlignment('middle');
   [24, 95, 95, 95, 16, 95, 95, 95, 16, 95, 95, 95, 16, 95, 95, 95, 24].forEach(function (w, i) { d.setColumnWidth(i + 1, w); });
-  d.hideColumns(18, 2);
+  d.hideColumns(18, 6);   // R-W: calculations and chart data
 
   // calculations (hidden column S)
   var calc = [
@@ -770,6 +774,15 @@ function buildDashboard_(ss) {
       if (c.bar) b.setFormula(X(c.bar)).setBackground(dark ? T.darkTrack : T.track);
     });
   };
+
+  // Other layouts (Settings -> Dashboard layout) draw their own body between the header and the footer.
+  var layout = layoutFor_(ss);
+  if (layout !== 'Classic' && DASH_LAYOUTS_[layout]) {
+    var ctx = { ss: ss, d: d, T: T, X: X, V: V, LC: LC, LC2: LC2, IC2: IC2, It: It, bar: bar,
+                section: section, cardRow: cardRow, num: num, pct: pct };
+    dashFooter_(d, T, DASH_LAYOUTS_[layout](ctx));
+    return;
+  }
 
   // goal tracker: where we are against the goal, and where we should be by today
   var G = 6, g0 = 7;
@@ -926,8 +939,8 @@ function buildDashboard_(ss) {
     .addRange(d.getRange(top + 1, 8, 31, 1))
     .setNumHeaders(1)
     .setOption('title', 'Sent and replies per day')
-    .setOption('titleTextStyle', { color: T.navy, fontName: T.head, fontSize: 14, bold: true })
-    .setOption('colors', [T.navy, T.gold])
+    .setOption('titleTextStyle', { color: T.strong, fontName: T.head, fontSize: 14, bold: true })
+    .setOption('colors', [T.strong, T.gold])
     .setOption('backgroundColor', T.ivory)
     .setOption('legend', { position: 'bottom', textStyle: { color: T.muted, fontName: T.body } })
     .setOption('hAxis', { textStyle: { color: T.muted, fontName: T.body } })
@@ -937,8 +950,11 @@ function buildDashboard_(ss) {
     .build();
   d.insertChart(chart);
 
-  // footer with the credit
-  var foot = chartRow + 16;
+  dashFooter_(d, T, chartRow + 16);
+}
+
+// The credit strip at the bottom of every Dashboard layout. Rows after it are removed.
+function dashFooter_(d, T, foot) {
   d.setRowHeight(foot - 1, 18);
   d.setRowHeight(foot, 36);
   d.getRange(foot, 2, 1, 15).setBackground(T.navy)
@@ -948,6 +964,352 @@ function buildDashboard_(ss) {
   d.getRange(foot, 10, 1, 7).merge().setValue(BRAND.credit + '  ').setFontFamily(T.head).setFontStyle('italic')
     .setFontSize(11).setFontColor(T.gold2).setHorizontalAlignment('right');
   if (d.getMaxRows() > foot + 2) d.deleteRows(foot + 3, d.getMaxRows() - foot - 2);
+}
+
+// ---------------------------------------------------------------- dashboard layouts
+
+var LAYOUT_INFO = {
+  'Classic':       'Goal tracker, 16 cards, status and angle panels, day-by-day table and chart.',
+  'Executive':     'One big hero number with a goal ring, 4 key tiles and a large trend chart.',
+  'Scoreboard':    'Stadium style: giant numbers, TODAY against ALL TIME, with the goal on top.',
+  'Funnel':        'Your pipeline as a funnel, from leads to meetings, with the % kept at each step.',
+  'Inbox Command': 'One row per Gmail: sent today against its limit, health, waiting leads, totals.',
+  'Compact':       'Everything on one screen: 8 small tiles, each with a 14-day trend.'
+};
+var LAYOUT_NAMES = Object.keys(LAYOUT_INFO);
+
+function layoutFor_(ss) {
+  var want = '';
+  try { want = normHeader_(readSettings_(ss).layout); } catch (e) { /* default */ }
+  return LAYOUT_NAMES.filter(function (n) { return want && normHeader_(n).indexOf(want) === 0; })[0] || 'Classic';
+}
+
+// Hidden helper area (columns T-W, rows 1-31): a day-by-day series for the charts. It sits at the
+// top so the footer, which removes the rows below it, never removes it.
+function dashSeries_(c) {
+  var d = c.d, X = c.X, r0 = 1;
+  d.getRange(r0, 20, 1, 4).setValues([['Date', 'Sent', 'Replies', 'Bounces']]);
+  var rows = [];
+  for (var n = 0; n < 30; n++) {
+    var r = r0 + 1 + n;
+    var day = function (ev) {
+      return 'COUNTIFS(Log!$D:$D,"' + ev + '",Log!$A:$A,">="&$T' + r + ',Log!$A:$A,"<"&($T' + r + '+1))';
+    };
+    rows.push([X('=IF(' + n + '<{length},{start}+' + n + ',"")'),
+      '=IF($T' + r + '="","",' + day('SENT*') + ')',
+      '=IF($T' + r + '="","",' + day('REPLY') + '+' + day('UNSUB') + ')',
+      '=IF($T' + r + '="","",' + day('BOUNCE') + ')']);
+  }
+  d.getRange(r0 + 1, 20, 30, 4).setFormulas(rows);
+  d.getRange(r0 + 1, 20, 30, 1).setNumberFormat('d mmm');
+  return { header: r0, first: r0 + 1, rows: 30 };
+}
+
+// A 14-day mini chart inside one cell, for an event like "SENT*".
+function dashTrend_(T, evs, colour) {
+  var part = function (ev) {
+    return 'COUNTIFS(Log!$D:$D,"' + ev + '",Log!$A:$A,">="&(TODAY()-14+SEQUENCE(14)),Log!$A:$A,"<"&(TODAY()-13+SEQUENCE(14)))';
+  };
+  return '=SPARKLINE(ARRAYFORMULA(' + evs.map(part).join('+') + '),{"charttype","column";"color","' + (colour || T.gold) + '"})';
+}
+
+function dashChart_(c, title, type, ranges, row, width, height, colors, extra) {
+  var b = c.d.newChart();
+  b = type === 'pie' ? b.asPieChart() : type === 'line' ? b.asLineChart() : b.asColumnChart();
+  ranges.forEach(function (r) { b.addRange(r); });
+  b.setNumHeaders(1)
+    .setOption('title', title)
+    .setOption('titleTextStyle', { color: c.T.strong, fontName: c.T.head, fontSize: 14, bold: true })
+    .setOption('colors', colors).setOption('backgroundColor', '#FFFFFF')
+    .setOption('legend', { position: type === 'pie' ? 'none' : 'bottom', textStyle: { color: c.T.muted, fontName: c.T.body } })
+    .setOption('hAxis', { textStyle: { color: c.T.muted, fontName: c.T.body } })
+    .setOption('vAxis', { textStyle: { color: c.T.muted, fontName: c.T.body }, gridlines: { color: c.T.line } })
+    .setOption('width', width).setOption('height', height)
+    .setPosition(row, extra && extra.col || 2, 0, 0);
+  try { b.setHiddenDimensionStrategy(Charts.ChartHiddenDimensionStrategy.SHOW_BOTH); } catch (e) { /* older Sheets */ }
+  if (extra && extra.options) Object.keys(extra.options).forEach(function (k) { b.setOption(k, extra.options[k]); });
+  c.d.insertChart(b.build());
+}
+
+function dashBox_(c, row, col, rows, cols, bg) {
+  var r = c.d.getRange(row, col, rows, cols);
+  r.setBackground(bg || '#FFFFFF').setBorder(true, true, true, true, null, null, c.T.line, SpreadsheetApp.BorderStyle.SOLID);
+  c.d.getRange(row, col, 1, cols).setBorder(true, null, null, null, null, null, c.T.gold, SpreadsheetApp.BorderStyle.SOLID_THICK);
+  return r;
+}
+
+function goalStatus_(X) {
+  return X('=IF({delivered}>={goal},"🏆 Goal reached",IF({delivered}>={expected},"✅ On track: ahead by "&TEXT({delivered}-{expected},"#,##0"),' +
+    '"⚠️ Behind by "&TEXT({expected}-{delivered},"#,##0")&": need "&TEXT({needed},"#,##0")&" a day"))');
+}
+
+function goalBar_(c) {
+  return c.X('=SPARKLINE({MIN({goal},{delivered}),MAX(0,MIN({goal},{expected})-{delivered})},' +
+    '{"charttype","bar";"max",MAX(1,{goal});"color1","' + c.T.gold + '";"color2","' + c.T.paleGold + '"})');
+}
+
+var DASH_LAYOUTS_ = {
+
+  // One big hero number with a goal ring, 4 key tiles and a large trend chart.
+  'Executive': function (c) {
+    var d = c.d, T = c.T, X = c.X;
+    var s = dashSeries_(c);
+    c.section(7, 'Campaign at a glance');
+    var h = 8;
+    [[h, 30], [h + 1, 70], [h + 2, 26], [h + 3, 30], [h + 4, 26], [h + 5, 30], [h + 6, 14]].forEach(function (x) { d.setRowHeight(x[0], x[1]); });
+    dashBox_(c, h, 2, 6, 7).setHorizontalAlignment('center');
+    d.getRange(h, 2, 1, 7).merge().setValue('DELIVERED').setFontSize(9).setFontWeight('bold').setFontColor(T.muted).setVerticalAlignment('bottom');
+    d.getRange(h + 1, 2, 1, 7).merge().setFormula(X('={delivered}')).setNumberFormat(c.num)
+      .setFontFamily(T.head).setFontSize(54).setFontWeight('bold').setFontColor(T.strong);
+    d.getRange(h + 2, 2, 1, 7).merge().setFormula(X('="of "&TEXT({goal},"#,##0")&" goal   ·   "&TEXT({progress},"0.0%")&"   ·   "&TEXT({toGo},"#,##0")&" to go"'))
+      .setFontSize(11).setFontColor(T.muted);
+    d.getRange(h + 3, 2, 1, 7).merge().setFormula(goalStatus_(X)).setFontSize(11).setFontWeight('bold');
+    d.getRange(h + 4, 2, 1, 7).merge().setFormula(goalBar_(c)).setBackground(T.track);
+    d.getRange(h + 5, 2, 1, 7).merge().setFormula(X('="Day "&{dayNum}&" of "&{length}&"   ·   need "&TEXT({needed},"#,##0")&" a day"'))
+      .setFontSize(9).setFontColor(T.muted);
+    d.getRange(38, 18, 3, 2).setValues([['Part', 'Count'], ['Delivered', ''], ['To go', '']]);
+    d.getRange(39, 19, 2, 1).setFormulas([[X('={delivered}')], [X('={toGo}')]]);
+    dashChart_(c, 'Goal', 'pie', [d.getRange(38, 18, 3, 2)], h, 560, 236, [T.gold, T.track],
+      { col: 10, options: { pieHole: 0.62, pieSliceText: 'none' } });
+    c.cardRow(h + 8, [
+      { label: 'Sent today', value: '={sentToday}', sub: '="Needed per day: "&TEXT({needed},"#,##0")', bar: c.bar('{sentToday}/{needed}') },
+      { label: 'Replies today', value: '={replyToday}', sub: '="Replies in total: "&TEXT({replyAll},"#,##0")' },
+      { label: 'Reply rate', value: '={replyRate}', fmt: c.pct, sub: '=TEXT({replyAll},"#,##0")&" replies"', bar: c.bar('{replyRate}/0.1') },
+      { label: 'Bounce rate', value: '={bounceRate}', fmt: c.pct, sub: '="Keep under 2%"',
+        bar: c.bar('{bounceRate}/0.05', 'IF({bounceRate}>=0.02,"' + T.bad + '","' + T.good + '")') }
+    ]);
+    c.section(h + 15, 'Trend');
+    dashChart_(c, 'Sent and replies per day', 'column', [d.getRange(s.header, 20, s.rows + 1, 3)],
+      h + 16, 1170, 320, [T.strong, T.gold]);
+    return h + 34;
+  },
+
+  // Stadium style: giant numbers, TODAY against ALL TIME, with the goal on top.
+  'Scoreboard': function (c) {
+    var d = c.d, T = c.T, X = c.X;
+    var top = 7;
+    d.getRange(top, 2, 15, 15).setBackground(T.navy);
+    d.setRowHeight(top, 34);
+    d.getRange(top, 2, 1, 7).merge().setValue('  GOAL').setFontFamily(T.head).setFontSize(14).setFontWeight('bold').setFontColor(T.gold2);
+    d.getRange(top, 10, 1, 7).merge().setFormula(goalStatus_(X)).setHorizontalAlignment('right').setFontWeight('bold').setFontColor(T.onNavy);
+    d.setRowHeight(top + 1, 30);
+    d.getRange(top + 1, 2, 1, 15).merge().setFormula(goalBar_(c)).setBackground(T.darkTrack);
+    d.setRowHeight(top + 2, 30);
+    d.getRange(top + 2, 2, 1, 15).merge().setHorizontalAlignment('center').setFontFamily(T.head).setFontSize(14).setFontColor(T.onNavy)
+      .setFormula(X('=TEXT({delivered},"#,##0")&" of "&TEXT({goal},"#,##0")&" delivered   ·   "&TEXT({progress},"0.0%")&"   ·   day "&{dayNum}&" of "&{length}'));
+    var hr = top + 4;
+    d.setRowHeight(hr - 1, 14);
+    d.setRowHeight(hr, 34);
+    [[2, 3, ''], [6, 3, 'TODAY'], [10, 3, 'ALL TIME'], [14, 3, 'RATE']].forEach(function (x) {
+      d.getRange(hr, x[0], 1, x[1]).merge().setValue(x[2]).setHorizontalAlignment('center').setFontSize(11)
+        .setFontWeight('bold').setFontColor(T.gold2);
+    });
+    d.getRange(hr, 2, 1, 15).setBorder(null, null, true, null, null, null, T.gold, SpreadsheetApp.BorderStyle.SOLID_THICK);
+    var lines = [
+      ['EMAILS SENT', '={sentToday}', '={sentAll}', '="Need "&TEXT({needed},"#,##0")&"/day"'],
+      ['REPLIES', '={replyToday}', '={replyAll}', '=TEXT({replyRate},"0.0%")&" reply rate"'],
+      ['BOUNCES', '={bounceToday}', '={bounceAll}', '=TEXT({bounceRate},"0.0%")&" bounce rate"'],
+      ['NEW PEOPLE', '={firstToday}', '={firstAll}', '="of "&TEXT({leads},"#,##0")&" leads"'],
+      ['MEETINGS', '="–"', '={meetings}', '=TEXT({interested},"#,##0")&" interested"']
+    ];
+    lines.forEach(function (l, i) {
+      var r = hr + 1 + i * 2;
+      d.setRowHeight(r, 64); d.setRowHeight(r + 1, 6);
+      d.getRange(r, 2, 1, 15).setBackground(i % 2 ? T.navy : T.navy2);
+      d.getRange(r, 2, 1, 3).merge().setValue('  ' + l[0]).setFontWeight('bold').setFontSize(12).setFontColor(T.onNavy);
+      d.getRange(r, 6, 1, 3).merge().setFormula(X(l[1])).setNumberFormat(c.num).setHorizontalAlignment('center')
+        .setFontFamily(T.head).setFontSize(40).setFontWeight('bold').setFontColor(T.gold2);
+      d.getRange(r, 10, 1, 3).merge().setFormula(X(l[2])).setNumberFormat(c.num).setHorizontalAlignment('center')
+        .setFontFamily(T.head).setFontSize(40).setFontWeight('bold').setFontColor(T.onNavy);
+      d.getRange(r, 14, 1, 3).merge().setFormula(X(l[3])).setHorizontalAlignment('center').setFontSize(11).setFontColor(T.soft);
+    });
+    return hr + 13;
+  },
+
+  // Your pipeline as a funnel, from leads to meetings.
+  'Funnel': function (c) {
+    var d = c.d, T = c.T, X = c.X;
+    c.section(7, 'Your funnel');
+    var steps = [
+      ['Leads', 'In your sheet', '={leads}'],
+      ['Contacted', 'Got the first email', '={firstAll}'],
+      ['Reached', 'Contacted and did not bounce', '=MAX(0,{firstAll}-{bounceAll})'],
+      ['Replied', 'Answered (incl. unsubscribes)', '={replyAll}'],
+      ['Interested', 'Interested, meetings or customers', '={interested}+{meetings}+{customers}'],
+      ['Meetings', 'Meetings booked', '={meetings}']
+    ];
+    var shades = [T.strong, T.strong, T.gold, T.gold, T.good, T.good];
+    var r0 = 8;
+    d.setRowHeight(r0, 24);
+    [[2, 3, 'STEP'], [6, 7, 'HOW MANY OF YOUR LEADS'], [14, 1, 'COUNT'], [15, 2, 'KEPT FROM STEP BEFORE']].forEach(function (x) {
+      d.getRange(r0, x[0], 1, x[1]).merge().setValue(x[2]).setFontSize(8).setFontWeight('bold').setFontColor(T.muted).setHorizontalAlignment('center');
+    });
+    steps.forEach(function (st, i) {
+      var r = r0 + 1 + i;
+      d.setRowHeight(r, 48);
+      d.getRange(r, 2, 1, 15).setBackground(i % 2 ? T.ivory : '#FFFFFF');
+      d.getRange(r, 2, 1, 3).merge().setValue(st[0] + '\n' + st[1]).setFontSize(10).setFontColor(T.strong).setFontWeight('bold').setWrap(true);
+      d.getRange(r, 14).setFormula(X(st[2])).setNumberFormat(c.num).setHorizontalAlignment('center')
+        .setFontFamily(T.head).setFontSize(18).setFontWeight('bold').setFontColor(T.strong);
+      d.getRange(r, 6, 1, 7).merge().setFormula(X('=IF({leads}=0,"",SPARKLINE(N' + r + '/{leads},{"charttype","bar";"max",1;"color1","' + shades[i] + '"}))'))
+        .setBackground(T.track);
+      d.getRange(r, 15, 1, 2).merge().setFormula(i ? '=IFERROR(TEXT(N' + r + '/N' + (r - 1) + ',"0%"),"–")' : '="100%"')
+        .setHorizontalAlignment('center').setFontSize(13).setFontWeight('bold').setFontColor(T.gold);
+    });
+    d.getRange(r0, 2, steps.length + 1, 15).setBorder(true, true, true, true, null, null, T.line, SpreadsheetApp.BorderStyle.SOLID);
+    var t = r0 + steps.length + 2;
+    c.section(t, 'Today');
+    c.cardRow(t + 1, [
+      { label: 'Sent today', value: '={sentToday}', sub: '="Needed per day: "&TEXT({needed},"#,##0")', bar: c.bar('{sentToday}/{needed}') },
+      { label: 'New people today', value: '={firstToday}', sub: '="Follow-ups: "&TEXT({fuToday},"#,##0")' },
+      { label: 'Replies today', value: '={replyToday}', sub: '="In total: "&TEXT({replyAll},"#,##0")' },
+      { label: 'Goal', value: '={progress}', fmt: c.pct, sub: '=TEXT({delivered},"#,##0")&" of "&TEXT({goal},"#,##0")', bar: c.bar('{progress}') }
+    ]);
+    return t + 9;
+  },
+
+  // One row per Gmail: sent today against its limit, health, waiting leads, totals.
+  'Inbox Command': function (c) {
+    var d = c.d, T = c.T, X = c.X, It = c.It;
+    c.section(7, 'Today');
+    c.cardRow(8, [
+      { label: 'Sent today', value: '={sentToday}', sub: '="Capacity: "&TEXT({capacity},"#,##0")&" a day"', bar: c.bar('{sentToday}/{capacity}') },
+      { label: 'Active Gmails', value: '={activeInboxes}&" of "&{inboxes}', sub: '="Paused: "&({inboxes}-{activeInboxes})' },
+      { label: 'Leads waiting', value: '={waiting}', sub: '="In sequence: "&TEXT({inSeq},"#,##0")' },
+      { label: 'Bounces today', value: '={bounceToday}', sub: '="Bounce rate today: "&TEXT({bounceRateToday},"0.0%")' }
+    ]);
+    c.section(15, 'Your Gmails');
+    var hr = 16;
+    d.setRowHeight(hr, 26);
+    var cols = [[2, 3, 'GMAIL'], [6, 1, 'STATUS'], [7, 1, 'SENT TODAY'], [8, 1, 'LIMIT'], [10, 3, 'TODAY’S PROGRESS'],
+                [14, 1, 'HEALTH'], [15, 1, 'WAITING'], [16, 1, 'TOTAL SENT']];
+    d.getRange(hr, 2, 1, 15).setBackground(T.navy);
+    cols.forEach(function (x) {
+      d.getRange(hr, x[0], 1, x[1]).merge().setValue(x[2]).setFontSize(8).setFontWeight('bold').setFontColor(T.onNavy).setHorizontalAlignment('center');
+    });
+    var ref = function (h, r) { return 'Inboxes!$' + It[h] + '$' + r; };
+    var N = 20;
+    for (var i = 0; i < N; i++) {
+      var r = hr + 1 + i, src = i + 2, e = ref('Inbox Email', src);
+      d.setRowHeight(r, 26);
+      d.getRange(r, 2, 1, 15).setBackground(i % 2 ? T.ivory : '#FFFFFF');
+      var lim = 'IF(' + ref('Daily Limit', src) + '="",' + c.V('Default daily limit per inbox') + ',' + ref('Daily Limit', src) + ')';
+      d.getRange(r, 2, 1, 3).merge().setFormula('=IF(' + e + '="","",' + e + ')').setFontWeight('bold').setFontColor(T.strong);
+      d.getRange(r, 6, 1, 3).setFormulas([['=IF(' + e + '="","",' + ref('Status', src) + ')',
+        '=IF(' + e + '="","",' + ref('Sent Today', src) + ')', '=IF(' + e + '="","",' + lim + ')']]).setHorizontalAlignment('center');
+      d.getRange(r, 10, 1, 3).merge().setFormula('=IF(' + e + '="","",SPARKLINE(MIN(1,IFERROR(G' + r + '/H' + r + ',0)),{"charttype","bar";"max",1;"color1","' + T.gold + '"}))')
+        .setBackground(T.track);
+      d.getRange(r, 14, 1, 3).setFormulas([['=IF(' + e + '="","",' + ref('Health', src) + ')',
+        '=IF(' + e + '="","",' + ref('Leads Waiting', src) + ')', '=IF(' + e + '="","",' + ref('Total Sent', src) + ')']])
+        .setHorizontalAlignment('center');
+    }
+    d.getRange(hr, 2, N + 1, 15).setBorder(true, true, true, true, null, null, T.line, SpreadsheetApp.BorderStyle.SOLID);
+    return hr + N + 3;
+  },
+
+  // Everything on one screen: 8 small tiles, each with a 14-day trend.
+  'Compact': function (c) {
+    var d = c.d, T = c.T, X = c.X;
+    var COLS4 = [2, 6, 10, 14];
+    var tiles = [
+      ['Sent today', '={sentToday}', c.num, dashTrend_(T, ['SENT*']), '="Need "&TEXT({needed},"#,##0")&" a day"'],
+      ['Replies today', '={replyToday}', c.num, dashTrend_(T, ['REPLY', 'UNSUB']), '="Total "&TEXT({replyAll},"#,##0")'],
+      ['Bounces today', '={bounceToday}', c.num, dashTrend_(T, ['BOUNCE'], T.bad), '="Rate "&TEXT({bounceRate},"0.0%")'],
+      ['New people today', '={firstToday}', c.num, dashTrend_(T, ['SENT_1']), '="Total "&TEXT({firstAll},"#,##0")'],
+      ['Delivered', '={delivered}', c.num, c.bar('{progress}'), '="of "&TEXT({goal},"#,##0")&" · "&TEXT({progress},"0%")'],
+      ['Reply rate', '={replyRate}', c.pct, c.bar('{replyRate}/0.1'), '="Meetings "&TEXT({meetings},"#,##0")'],
+      ['Leads waiting', '={waiting}', c.num, c.bar('{waiting}/MAX(1,{leads})'), '="of "&TEXT({leads},"#,##0")&" leads"'],
+      ['Active Gmails', '={activeInboxes}&" of "&{inboxes}', c.num, c.bar('{activeInboxes}/MAX(1,{inboxes})'), '="Day "&{dayNum}&" of "&{length}']
+    ];
+    [7, 13].forEach(function (row, k) {
+      [[0, 20], [1, 34], [2, 30], [3, 18], [4, 10]].forEach(function (x) { d.setRowHeight(row + x[0], x[1]); });
+      tiles.slice(k * 4, k * 4 + 4).forEach(function (t, i) {
+        var col = COLS4[i];
+        dashBox_(c, row, col, 4, 3).setHorizontalAlignment('center');
+        d.getRange(row, col, 1, 3).merge().setValue(t[0].toUpperCase()).setFontSize(8).setFontWeight('bold').setFontColor(T.muted);
+        d.getRange(row + 1, col, 1, 3).merge().setFormula(X(t[1])).setNumberFormat(t[2])
+          .setFontFamily(T.head).setFontSize(20).setFontWeight('bold').setFontColor(T.strong);
+        d.getRange(row + 2, col, 1, 3).merge().setFormula(X(t[3])).setBackground(k ? T.track : '#FFFFFF');
+        d.getRange(row + 3, col, 1, 3).merge().setFormula(X(t[4])).setFontSize(8).setFontColor(T.muted);
+      });
+    });
+    d.setRowHeight(18, 14);
+    d.setRowHeight(19, 30);
+    d.getRange(19, 2, 1, 15).merge().setBackground('#FFFFFF').setHorizontalAlignment('center').setFontSize(10).setFontColor(T.strong)
+      .setBorder(true, true, true, true, null, null, T.line, SpreadsheetApp.BorderStyle.SOLID)
+      .setFormula('=TEXTJOIN("   ·   ",TRUE,' + STATUS_LIST.map(function (s) {
+        return '"' + s + ' "&COUNTIF(' + c.LC('Status') + ',"' + s + '")';
+      }).join(',') + ')');
+    d.setRowHeight(20, 22);
+    d.getRange(20, 2, 1, 15).merge().setHorizontalAlignment('center').setFontSize(8).setFontColor(T.muted)
+      .setValue('Small charts show the last 14 days.');
+    return 23;
+  }
+};
+
+// Outreach -> Choose dashboard layout (loader slot 4): a window with a preview of every layout.
+function slot4() {
+  askAllPermissions_();
+  var ss = ss_();
+  loadTheme_(ss);
+  var current = layoutFor_(ss);
+  var html = HtmlService.createHtmlOutput(layoutChooserHtml_(THEME, current)).setWidth(900).setHeight(640);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Choose a dashboard layout');
+}
+
+// Called by the chooser window (loader slot 5): saves the layout and rebuilds the Dashboard.
+function slot5(name) {
+  var ss = ss_();
+  if (LAYOUT_NAMES.indexOf(name) < 0) throw new Error('Unknown layout: ' + name);
+  var st = ss.getSheetByName(SHEET.SETTINGS);
+  var vals = st.getRange(1, 1, st.getLastRow(), 1).getValues();
+  var row = -1;
+  vals.forEach(function (v, i) { if (row < 0 && String(v[0]).trim() === 'Dashboard layout') row = i + 1; });
+  if (row < 0) { st.appendRow(['Dashboard layout', name, SETTINGS_DEF.filter(function (x) { return x.key === 'layout'; })[0].note]); }
+  else { st.getRange(row, 2).clearDataValidations().setValue(name); }
+  loadTheme_(ss);
+  buildDashboard_(ss);
+  try { addGuards_(ss); } catch (e) { /* guards are a nice-to-have */ }
+  ss.setActiveSheet(ss.getSheetByName(SHEET.DASH));
+  return 'Dashboard layout: ' + name;
+}
+
+// The chooser window: mini previews drawn in the sheet's colours.
+function layoutChooserHtml_(T, current) {
+  var bg = T.ivory, band = T.navy, acc = T.gold, card = '#FFFFFF', line = T.line, txt = T.strong;
+  var b = function (w, h, c, extra) { return '<i style="display:block;width:' + w + ';height:' + h + 'px;background:' + c + ';' + (extra || '') + '"></i>'; };
+  var row = function (inner, gap) { return '<div style="display:flex;gap:' + (gap || 4) + 'px;margin-top:5px">' + inner + '</div>'; };
+  var tile = function (dark) { return '<div style="flex:1;background:' + (dark ? band : card) + ';border:1px solid ' + line + ';border-top:2px solid ' + acc + ';height:22px;padding:3px"><i style="display:block;width:60%;height:6px;margin:3px auto;background:' + (dark ? T.gold2 : txt) + '"></i>' + b('100%', 3, acc) + '</div>'; };
+  var tiles = function (n, dark1) { var s = ''; for (var i = 0; i < n; i++) s += tile(dark1 && !i); return row(s); };
+  var bars = function (ws, cols) { return ws.map(function (w, i) { return row(b('28px', 8, line) + b(w + '%', 8, cols ? cols[i] : acc)); }).join(''); };
+  var p = {
+    'Classic': row(b('100%', 12, card, 'border-top:2px solid ' + acc)) + tiles(4, false) + tiles(4, true) + row(b('48%', 30, card, 'border:1px solid ' + line) + b('48%', 30, card, 'border:1px solid ' + line)),
+    'Executive': row('<div style="flex:1;background:' + card + ';border:1px solid ' + line + ';border-top:2px solid ' + acc + ';height:46px;text-align:center"><i style="display:block;width:50%;height:16px;margin:8px auto 4px;background:' + txt + '"></i>' + b('80%', 4, acc, 'margin:0 auto') + '</div><div style="width:46px;height:46px;border-radius:50%;border:9px solid ' + acc + ';border-left-color:' + line + ';box-sizing:border-box"></div>') + tiles(4, false) + row(b('100%', 26, card, 'border:1px solid ' + line + ';background:linear-gradient(to top,' + acc + ' 0 40%,' + card + ' 40%)')),
+    'Scoreboard': '<div style="background:' + band + ';padding:4px">' + row(b('100%', 6, acc)) + ['', '', '', ''].map(function () { return row(b('28%', 10, T.soft) + b('30%', 14, T.gold2) + b('30%', 14, T.onNavy), 6); }).join('') + '</div>',
+    'Funnel': bars([100, 80, 62, 30, 16, 8], [txt, txt, acc, acc, T.good, T.good]) + tiles(4, false),
+    'Inbox Command': tiles(4, false) + row(b('100%', 8, band)) + ['', '', '', '', ''].map(function () { return row(b('30%', 6, txt) + b('16%', 6, line) + b('30%', 6, acc) + b('14%', 6, T.good)); }).join(''),
+    'Compact': tiles(4, false) + row(['', '', '', ''].map(function () { return '<div style="flex:1;background:' + card + ';border:1px solid ' + line + ';height:26px;display:flex;align-items:flex-end;gap:1px;padding:2px">' + [4, 8, 5, 10, 7, 12, 9, 14].map(function (h) { return '<i style="flex:1;height:' + h + 'px;background:' + acc + '"></i>'; }).join('') + '</div>'; }).join('')) + row(b('100%', 8, line))
+  };
+  var cards = LAYOUT_NAMES.map(function (n) {
+    return '<label class="opt' + (n === current ? ' on' : '') + '"><input type="radio" name="l" value="' + n + '"' + (n === current ? ' checked' : '') + '>' +
+      '<div class="pv" style="background:' + bg + '"><div style="background:' + band + ';height:14px;border-bottom:2px solid ' + acc + '"></div><div style="padding:4px 6px">' + p[n] + '</div></div>' +
+      '<b>' + n + (n === current ? ' <span>(now)</span>' : '') + '</b><small>' + LAYOUT_INFO[n] + '</small></label>';
+  }).join('');
+  return '<style>body{font-family:Arial,sans-serif;margin:0;padding:6px 10px;color:#1D2333}' +
+    '.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}' +
+    '.opt{display:block;border:2px solid #E3E3E3;border-radius:8px;padding:8px;cursor:pointer}.opt.on{border-color:' + acc + '}' +
+    '.opt input{display:none}.opt b{display:block;margin-top:8px;font-size:14px}.opt b span{color:#888;font-weight:normal;font-size:12px}' +
+    '.opt small{display:block;color:#666;font-size:11px;line-height:1.35;margin-top:3px;min-height:30px}' +
+    '.pv{height:130px;border:1px solid #ddd;overflow:hidden}' +
+    '.btn{background:' + band + ';color:' + T.onNavy + ';border:2px solid ' + acc + ';border-radius:4px;padding:10px 22px;font-size:14px;font-weight:bold;cursor:pointer}' +
+    '#msg{margin-left:12px;color:#444}</style>' +
+    '<div class="grid">' + cards + '</div>' +
+    '<p style="margin-top:16px"><button class="btn" id="go" onclick="go()">Use this layout</button><span id="msg">Your data and numbers stay the same. Only the look changes.</span></p>' +
+    '<script>' +
+    'document.querySelectorAll(".opt").forEach(function(o){o.addEventListener("click",function(){document.querySelectorAll(".opt").forEach(function(x){x.classList.remove("on")});o.classList.add("on");o.querySelector("input").checked=true;});});' +
+    'function go(){var v=document.querySelector("input[name=l]:checked");if(!v)return;document.getElementById("go").disabled=true;document.getElementById("msg").textContent="Building the "+v.value+" layout... about 20 seconds.";' +
+    'google.script.run.withSuccessHandler(function(){google.script.host.close();}).withFailureHandler(function(e){document.getElementById("go").disabled=false;document.getElementById("msg").textContent="Could not build it: "+(e&&e.message?e.message:e);}).slot5(v.value);}' +
+    '</script>';
 }
 
 // Navy and gold header row, body font and alternating rows for a data tab.
@@ -2227,7 +2589,7 @@ function analyzeTeam_(d, prev, now, todayStart) {
   if (d.settings) {
     var labels = {};
     d.settings.forEach(function (x) { labels[String(x[0]).trim()] = true; });
-    var gone = SETTINGS_DEF.filter(function (x) { return !labels[x.label] && x.key !== 'theme'; }).map(function (x) { return x.label; });
+    var gone = SETTINGS_DEF.filter(function (x) { return !labels[x.label] && x.key !== 'theme' && x.key !== 'layout'; }).map(function (x) { return x.label; });
     if (gone.length) add('red', 'settingsRows', 'Settings rows deleted or renamed: ' + gone.join(', '), HOW_REPAIR);
     if (st.dailyLimit > 35) add('yellow', 'limit', 'Daily limit raised to ' + st.dailyLimit + ' (max 35 for free Gmail)', 'Their Settings tab.');
     if (!st.rampStart) add('yellow', 'warmup', 'Warm-up turned off', 'Their Settings tab.');
@@ -2392,6 +2754,7 @@ function settingsFromValues_(values) {
   s.defFu1 = String(s.defFu1 || '').trim();
   s.defFu2 = String(s.defFu2 || '').trim();
   s.theme = String(s.theme || 'Navy & Gold').trim();
+  s.layout = String(s.layout || 'Classic').trim();
   if (!(s.start instanceof Date)) s.start = s.start ? new Date(s.start) : new Date();
   return s;
 }

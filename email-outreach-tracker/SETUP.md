@@ -123,6 +123,10 @@ columns, and when you sort, use **Data → Sort range** with **"Data has header 
 dates and counts), Google asks **"Edit anyway?"**. Click **Cancel** unless you're sure. Settings refuse values
 that don't make sense (for example a daily limit of 500) and say what's allowed.
 
+**Change how the Dashboard looks:** **📧 Outreach → Choose dashboard layout** shows a preview of 6 layouts
+(Classic, Executive, Scoreboard, Funnel, Inbox Command, Compact). Click one, then **Use this layout**.
+Colours: Settings → **Colour theme**, then **📧 Outreach → Apply colour theme**. Layouts and themes mix freely.
+
 **Something looks wrong?** **📧 Outreach → Reset to default settings (keeps your leads).** It puts the settings back
 to normal (your campaign name, goal, dates and colour theme stay), shows hidden rows and columns, removes filters
 and repairs the tabs. Leads, sends, replies, Gmails and Do Not Contact are never touched.
