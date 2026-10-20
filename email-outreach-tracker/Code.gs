@@ -35,7 +35,7 @@ if (typeof OUTREACH_CONFIG === 'object' && OUTREACH_CONFIG) {
 
 // Change this every time you publish a new version, so you can see who has it
 // (Outreach -> Which Gmail am I using?).
-var CORE_VERSION = '2026-10-22';
+var CORE_VERSION = '2026-10-23';
 
 // ---------------------------------------------------------------- admins
 // Only these Gmails can use "Outreach -> Admin: watch team sheets".
@@ -115,7 +115,8 @@ var SETTINGS_DEF = [
   { key: 'defFu1', label: 'Default follow-up 1 (if a lead has none)', value: 'Hi {{first_name|there}}, just bumping this to the top of your inbox in case it got buried. Would it make sense to chat?', note: 'Only used when the lead has no Follow-up 1 Message. Leave blank to skip.' },
   { key: 'defFu2', label: 'Default follow-up 2 (if a lead has none)', value: 'Hi {{first_name|there}}, I will not keep filling your inbox, so this is my last note. If this is ever a priority, just reply and I will send details.', note: 'Only used when the lead has no Follow-up 2 Message. Leave blank to skip.' },
   { key: 'optOut', label: 'Opt-out line', value: 'P.S. Not relevant? Just reply "no" and I won\'t email you again.', note: 'Added to the end of every email. Leave blank for none.' },
-  { key: 'paused', label: 'Pause everything', value: false, note: 'Set TRUE to stop all sending right away.' }
+  { key: 'paused', label: 'Pause everything', value: false, note: 'Set TRUE to stop all sending right away.' },
+  { key: 'theme', label: 'Colour theme', value: 'Navy & Gold', note: 'Navy & Gold, Emerald & Gold or Burgundy & Gold. Then click Outreach -> Apply colour theme.' }
 ];
 
 // ---------------------------------------------------------------- menu
@@ -134,6 +135,7 @@ function onOpen() {
     .addItem('Check replies & bounces now', 'checkNow')
     .addSeparator()
     .addItem('Which Gmail am I using?', 'whoAmI')
+    .addItem('Apply colour theme', 'slot2')
     .addItem('About ' + BRAND.name, 'slot1')
     .addItem(viaLoader_() ? 'Check for updates now' : 'Version: ' + CORE_VERSION, viaLoader_() ? 'updateNow' : 'whoAmI')
     .addSeparator()
@@ -167,6 +169,10 @@ function setupSheet() {
   });
   var sv = st.getRange(1, 1, st.getLastRow(), 1).getValues();
   for (var i = 0; i < sv.length; i++) {
+    if (sv[i][0] === 'Colour theme') {
+      st.getRange(i + 1, 2).setDataValidation(SpreadsheetApp.newDataValidation()
+        .requireValueInList(THEME_NAMES, true).setAllowInvalid(false).build());
+    }
     if (sv[i][0] === 'Campaign start date') st.getRange(i + 1, 2).setNumberFormat('yyyy-mm-dd');
     if (sv[i][0] === 'Auto-pause inbox at bounce rate') st.getRange(i + 1, 2).setNumberFormat('0%');
   }
@@ -222,17 +228,18 @@ function setupSheet() {
   ensureSheet_(ss, SHEET.DNC, DNC_HEADERS);
 
   // Dashboard (rebuilt every time, holds no data of its own)
+  loadTheme_(ss);
   buildDashboard_(ss);
   styleTabs_(ss);
 
   // Tab order and colours
   var order = [SHEET.DASH, SHEET.LEADS, SHEET.INBOXES,
                SHEET.SETTINGS, SHEET.LOG, SHEET.DNC];
-  var colours = [THEME.gold, THEME.navy, THEME.navy, THEME.muted, THEME.muted, '#9B2C22'];
   order.forEach(function (name, idx) {
     var sh = ss.getSheetByName(name);
-    ss.setActiveSheet(sh); ss.moveActiveSheet(idx + 1); sh.setTabColor(colours[idx]);
+    ss.setActiveSheet(sh); ss.moveActiveSheet(idx + 1);
   });
+  colourTabs_(ss);
   var blank = ss.getSheetByName('Sheet1');
   if (blank && blank.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(blank);
   ss.setActiveSheet(ss.getSheetByName(SHEET.DASH));
@@ -412,9 +419,53 @@ function addStatusColors_(ld, lc) {
 // ---------------------------------------------------------------- look and feel
 
 var BRAND = { name: 'Paramount Orbit Scouting Centre', credit: 'Designed by D\'XLNTInnovator' };
-var THEME = { navy: '#0B1530', navy2: '#13204A', gold: '#C9A227', gold2: '#E8C766', ivory: '#FBF8F1',
-  line: '#E7DFC9', ink: '#1D2333', muted: '#6B7189', track: '#EFE8D3', soft: '#C7CCE0',
-  good: '#2E7D5B', bad: '#B3261E', head: 'Playfair Display', body: 'Montserrat' };
+// Colour themes. Pick one in Settings -> "Colour theme", then Outreach -> Apply colour theme.
+var THEMES = {
+  'Navy & Gold':     { navy: '#0B1530', navy2: '#13204A', ivory: '#FBF8F1', line: '#E7DFC9', muted: '#6B7189', soft: '#C7CCE0', darkTrack: '#2A3760' },
+  'Emerald & Gold':  { navy: '#0B3B2E', navy2: '#12513F', ivory: '#F8F6EF', line: '#E2DCC6', muted: '#5F6E68', soft: '#B9CFC6', darkTrack: '#1E5A48' },
+  'Burgundy & Gold': { navy: '#4A0F1D', navy2: '#64182A', ivory: '#FBF6F1', line: '#EBDCCF', muted: '#77646A', soft: '#D9BFC5', darkTrack: '#6E2335' }
+};
+var THEME_NAMES = Object.keys(THEMES);
+
+function themeFor_(name) {
+  var base = { gold: '#C9A227', gold2: '#E8C766', paleGold: '#F1DFA4', ink: '#1D2333', track: '#EFE8D3',
+    good: '#2E7D5B', bad: '#B3261E', head: 'Playfair Display', body: 'Montserrat' };
+  var want = normHeader_(name);
+  var key = THEME_NAMES.filter(function (n) {
+    var k = normHeader_(n);
+    return want && (k === want || k.indexOf(want) === 0);
+  })[0] || 'Navy & Gold';
+  var t = THEMES[key];
+  Object.keys(t).forEach(function (k) { base[k] = t[k]; });
+  base.name = key;
+  return base;
+}
+
+// The theme in use (read from Settings before anything is drawn).
+var THEME = themeFor_('Navy & Gold');
+
+function loadTheme_(ss) {
+  try { THEME = themeFor_(readSettings_(ss).theme); } catch (e) { THEME = themeFor_('Navy & Gold'); }
+  return THEME;
+}
+
+// Outreach -> Apply colour theme (uses the loader's second spare slot)
+function slot2() {
+  var ss = ss_();
+  loadTheme_(ss);
+  buildDashboard_(ss);
+  styleTabs_(ss);
+  colourTabs_(ss);
+  ss.setActiveSheet(ss.getSheetByName(SHEET.DASH));
+  alert_('Colour theme applied: ' + THEME.name + '.\n\nTo change it, pick another in Settings -> "Colour theme" and click this again.');
+}
+
+function colourTabs_(ss) {
+  var c = {};
+  c[SHEET.DASH] = THEME.gold; c[SHEET.LEADS] = THEME.navy; c[SHEET.INBOXES] = THEME.navy;
+  c[SHEET.SETTINGS] = THEME.muted; c[SHEET.LOG] = THEME.muted; c[SHEET.DNC] = '#9B2C22';
+  Object.keys(c).forEach(function (n) { var sh = ss.getSheetByName(n); if (sh) sh.setTabColor(c[n]); });
+}
 var STATUS_STYLE = {
   'New': ['#EEF1FA', '#13204A'], 'Needs message': ['#FCF1D6', '#7A5C00'],
   'In sequence': ['#E3E8F7', '#13204A'], 'Completed': ['#F6F0DC', '#7A5C00'],
@@ -449,7 +500,7 @@ function buildDashboard_(ss) {
   };
 
   // page
-  var ROWS = 110, COLS = 19;
+  var ROWS = 120, COLS = 19;
   if (d.getMaxRows() > ROWS) d.deleteRows(ROWS + 1, d.getMaxRows() - ROWS);
   if (d.getMaxColumns() > COLS) d.deleteColumns(COLS + 1, d.getMaxColumns() - COLS);
   d.setHiddenGridlines(true);
@@ -475,6 +526,7 @@ function buildDashboard_(ss) {
     ['dayNum', '=MAX(1,MIN({length},TODAY()-{start}+1))'],
     ['daysLeft', '=MAX(0,{start}+{length}-TODAY())'],
     ['needed', '=IF({daysLeft}=0,{toGo},ROUNDUP({toGo}/{daysLeft}))'],
+    ['expected', '=MIN({goal},ROUND({goal}*{dayNum}/{length}))'],
     ['replyRate', '=IFERROR({replyAll}/{firstAll},0)'],
     ['bounceRate', '=IFERROR({bounceAll}/{sentAll},0)'],
     ['bounceRateToday', '=IFERROR({bounceToday}/{sentToday},0)'],
@@ -499,7 +551,7 @@ function buildDashboard_(ss) {
   d.getRange(1, 19, calc.length, 1).setFormulas(calc.map(function (c) { return [X(c[1])]; }));
 
   // header band
-  [[1, 10], [2, 46], [3, 26], [4, 12], [5, 4], [6, 18]].forEach(function (h) { d.setRowHeight(h[0], h[1]); });
+  [[1, 10], [2, 46], [3, 26], [4, 12], [5, 4], [6, 16]].forEach(function (h) { d.setRowHeight(h[0], h[1]); });
   d.getRange(1, 1, 4, 17).setBackground(T.navy);
   d.getRange(5, 1, 1, 17).setBackground(T.gold);
   d.getRange('C2:L2').merge().setValue(BRAND.name).setFontFamily(T.head).setFontSize(24)
@@ -543,34 +595,59 @@ function buildDashboard_(ss) {
       d.getRange(row + 2, col, 1, 3).merge().setFormula(X(c.sub)).setFontSize(9)
         .setFontColor(dark ? T.soft : T.muted).setVerticalAlignment('top');
       var b = d.getRange(row + 3, col + 0, 1, 3).merge();
-      if (c.bar) b.setFormula(X(c.bar)).setBackground(dark ? '#2A3760' : T.track);
+      if (c.bar) b.setFormula(X(c.bar)).setBackground(dark ? T.darkTrack : T.track);
     });
   };
 
-  section(7, 'Today');
-  cardRow(8, [
+  // goal tracker: where we are against the goal, and where we should be by today
+  var G = 6, g0 = 7;
+  [[g0, 30], [g0 + 1, 34], [g0 + 2, 18], [g0 + 3, 30], [g0 + 4, 20], [g0 + 5, 12]].forEach(function (h) { d.setRowHeight(h[0], h[1]); });
+  d.getRange(g0, 2, 5, 15).setBackground('#FFFFFF')
+    .setBorder(true, true, true, true, null, null, T.line, SpreadsheetApp.BorderStyle.SOLID);
+  d.getRange(g0, 2, 1, 15).setBorder(true, null, null, null, null, null, T.gold, SpreadsheetApp.BorderStyle.SOLID_THICK);
+  d.getRange(g0, 2, 1, 7).merge().setValue('  GOAL TRACKER').setFontFamily(T.head).setFontSize(13)
+    .setFontWeight('bold').setFontColor(T.navy);
+  d.getRange(g0, 10, 1, 7).merge().setHorizontalAlignment('right').setFontWeight('bold').setFontSize(10).setFormula(X(
+    '=IF({delivered}>={goal},"🏆 Goal reached",IF({delivered}>={expected},"✅ On track: ahead by "&TEXT({delivered}-{expected},"#,##0"),' +
+    '"⚠️ Behind by "&TEXT({expected}-{delivered},"#,##0")&": need "&TEXT({needed},"#,##0")&" a day"))&"  "'));
+  d.getRange(g0 + 1, 2, 1, 15).merge().setFormula(X(
+    '=SPARKLINE({MIN({goal},{delivered}),MAX(0,MIN({goal},{expected})-{delivered})},' +
+    '{"charttype","bar";"max",MAX(1,{goal});"color1","' + T.gold + '";"color2","' + T.paleGold + '"})'))
+    .setBackground(T.track);
+  [[2, 4, '25%'], [6, 4, '50%'], [10, 4, '75%'], [14, 3, '100%  ']].forEach(function (m) {
+    d.getRange(g0 + 2, m[0], 1, m[1]).merge().setValue(m[2]).setHorizontalAlignment('right')
+      .setFontSize(8).setFontColor(T.muted);
+  });
+  d.getRange(g0 + 3, 2, 1, 15).merge().setHorizontalAlignment('center').setFontFamily(T.head).setFontSize(15)
+    .setFontColor(T.navy).setFormula(X('=TEXT({delivered},"#,##0")&" of "&TEXT({goal},"#,##0")&" delivered   ·   "&' +
+    'TEXT({progress},"0.0%")&"   ·   "&TEXT({toGo},"#,##0")&" to go   ·   day "&{dayNum}&" of "&{length}'));
+  d.getRange(g0 + 4, 2, 1, 15).merge().setHorizontalAlignment('center').setFontSize(8).setFontColor(T.muted)
+    .setValue('Gold = delivered so far.   Light gold = what should be done by today to finish on time.');
+
+  section(G + 7, 'Today');
+  cardRow(G + 8, [
     { label: 'Sent today', value: '={sentToday}', sub: '="Needed per day: "&TEXT({needed},"#,##0")', bar: bar('{sentToday}/{needed}') },
     { label: 'Replies today', value: '={replyToday}', sub: '="Replies in total: "&TEXT({replyAll},"#,##0")' },
     { label: 'Bounces today', value: '={bounceToday}', sub: '="Bounce rate today: "&TEXT({bounceRateToday},"0.0%")' },
     { label: 'New people contacted today', value: '={firstToday}', sub: '="Follow-ups sent today: "&TEXT({fuToday},"#,##0")' }
   ]);
-  section(14, 'All time');
-  cardRow(15, [
+  section(G + 14, 'All time');
+  cardRow(G + 15, [
     { label: 'Delivered', dark: true, value: '={delivered}', sub: '="of "&TEXT({goal},"#,##0")&" goal  ·  "&TEXT({progress},"0%")&"  ·  "&TEXT({toGo},"#,##0")&" to go"', bar: bar('{progress}') },
     { label: 'Sent in total', value: '={sentAll}', sub: '="First emails "&TEXT({firstAll},"#,##0")&"  ·  Follow-ups "&TEXT({fuAll},"#,##0")' },
     { label: 'Replies in total', value: '={replyAll}', sub: '="Unsubscribed: "&TEXT({unsubAll},"#,##0")' },
     { label: 'Bounces in total', value: '={bounceAll}', sub: '="Bounce rate "&TEXT({bounceRate},"0.0%")&"  ·  keep under 2%"',
       bar: bar('{bounceRate}/0.05', 'IF({bounceRate}>=0.02,"' + T.bad + '","' + T.good + '")') }
   ]);
-  section(21, 'Results');
-  cardRow(22, [
+  section(G + 21, 'Results');
+  cardRow(G + 22, [
     { label: 'Reply rate', value: '={replyRate}', fmt: pct, sub: '=TEXT({replyAll},"#,##0")&" replies from "&TEXT({firstAll},"#,##0")&" people"', bar: bar('{replyRate}/0.1') },
     { label: 'Interested', value: '={interested}', sub: '="Customers: "&TEXT({customers},"#,##0")' },
     { label: 'Meetings booked', value: '={meetings}', sub: '="From the Outcome column"' },
     { label: 'Do not contact', value: '={dnc}', sub: '="Never emailed again"' }
   ]);
-  section(28, 'Pipeline');
-  cardRow(29, [
+  section(G + 28, 'Pipeline');
+  cardRow(G + 29, [
     { label: 'Leads in total', value: '={leads}', sub: '="Waiting to start: "&TEXT({waiting},"#,##0")' },
     { label: 'In sequence', value: '={inSeq}', sub: '="Completed: "&TEXT({completed},"#,##0")' },
     { label: 'Days left', value: '={daysLeft}', sub: '="Day "&{dayNum}&" of "&{length}&"  ·  need "&TEXT({needed},"#,##0")&" a day"', bar: bar('{dayNum}/{length}') },
@@ -594,7 +671,7 @@ function buildDashboard_(ss) {
   };
 
   // leads by status (B-H) and results by angle (J-P)
-  var P = 36;
+  var P = G + 36;
   panel(P, 2, 7, 'Leads by Status');
   panel(P, 10, 7, 'Results by Angle');
   d.getRange(P + 1, 2, 1, 7).setBackground('#FFFFFF');
@@ -749,7 +826,9 @@ function showUploadDialog() {
   var options = allInboxes_(ss).map(function (i) {
     return '<option value="' + i + '">' + i + '</option>';
   }).join('');
+  loadTheme_(ss);
   var html = HtmlService.createHtmlOutput(UPLOAD_HTML_.replace('{{OPTIONS}}', options)
+      .replace(/#0B1530/g, THEME.navy).replace(/#FBF8F1/g, THEME.ivory)
       .replace('{{LOGO}}', LOGO_PNG_B64).replace('{{BRAND}}', BRAND.name).replace('{{CREDIT}}', BRAND.credit))
     .setWidth(680).setHeight(600);
   try {
@@ -1844,7 +1923,7 @@ function analyzeTeam_(d, prev, now, todayStart) {
   if (d.settings) {
     var labels = {};
     d.settings.forEach(function (x) { labels[String(x[0]).trim()] = true; });
-    var gone = SETTINGS_DEF.filter(function (x) { return !labels[x.label]; }).map(function (x) { return x.label; });
+    var gone = SETTINGS_DEF.filter(function (x) { return !labels[x.label] && x.key !== 'theme'; }).map(function (x) { return x.label; });
     if (gone.length) add('red', 'settingsRows', 'Settings rows deleted or renamed: ' + gone.join(', '), HOW_REPAIR);
     if (st.dailyLimit > 35) add('yellow', 'limit', 'Daily limit raised to ' + st.dailyLimit + ' (max 35 for free Gmail)', 'Their Settings tab.');
     if (!st.rampStart) add('yellow', 'warmup', 'Warm-up turned off', 'Their Settings tab.');
@@ -2007,6 +2086,7 @@ function settingsFromValues_(values) {
   s.defSubject = String(s.defSubject || '').trim();
   s.defFu1 = String(s.defFu1 || '').trim();
   s.defFu2 = String(s.defFu2 || '').trim();
+  s.theme = String(s.theme || 'Navy & Gold').trim();
   if (!(s.start instanceof Date)) s.start = s.start ? new Date(s.start) : new Date();
   return s;
 }
