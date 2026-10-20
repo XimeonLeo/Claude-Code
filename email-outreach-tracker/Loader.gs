@@ -13,7 +13,7 @@ var MASTER_SHEET = '';   // e.g. 'https://docs.google.com/spreadsheets/d/1AbC...
 var SENDER_NAME = '';    // e.g. 'Sarah Jones'
 
 // Where the latest Code.gs lives. The admin sets this ONCE before sharing this file.
-var CODE_URL = '';       // e.g. 'https://drive.google.com/file/d/1XyZ.../view?usp=sharing'
+var CODE_URL = 'https://drive.google.com/file/d/1W5Ap33DTLvVwo05_U4hX3YNDnrgAmXrq/view?usp=sharing';
 
 // ------------------------------------------------------------- do not change below this line
 
