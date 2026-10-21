@@ -121,6 +121,7 @@ var SETTINGS_DEF = [
   { key: 'defFu1', label: 'Default follow-up 1 (if a lead has none)', value: 'Hi {{first_name|there}}, just bumping this to the top of your inbox in case it got buried. Would it make sense to chat?', note: 'Only used when the lead has no Follow-up 1 Message. Leave blank to skip.' },
   { key: 'defFu2', label: 'Default follow-up 2 (if a lead has none)', value: 'Hi {{first_name|there}}, I will not keep filling your inbox, so this is my last note. If this is ever a priority, just reply and I will send details.', note: 'Only used when the lead has no Follow-up 2 Message. Leave blank to skip.' },
   { key: 'optOut', label: 'Opt-out line', value: 'P.S. Not relevant? Just reply "no" and I won\'t email you again.', note: 'Added to the end of every email. Leave blank for none.' },
+  { key: 'standard', label: 'Daily standard (emails sent per day)', value: '', note: 'Used by "My last 24 hours". Leave blank to use what your active Gmails can send today (daily limits, with warm-up).', added: true },
   { key: 'paused', label: 'Pause everything', value: false, note: 'Set TRUE to stop all sending right away.' },
   { key: 'layout', label: 'Dashboard layout', value: 'Classic', note: 'Classic, Executive, Scoreboard, Funnel, Inbox Command or Compact. Outreach -> Choose dashboard layout shows a preview of each.' },
   { key: 'theme', label: 'Colour theme', value: 'Navy & Gold', note: 'Navy & Gold, Emerald & Gold, Burgundy & Gold, Notion Style or ClickUp Style. Then click Outreach -> Apply colour theme.' }
@@ -142,6 +143,9 @@ function onOpen() {
     .addItem('Run now for THIS Gmail', 'runNow')
     .addItem('Check replies & bounces now', 'checkNow')
     .addSeparator()
+    .addItem('Replies: set outcomes & follow-ups', 'slot6')
+    .addItem('My last 24 hours (report)', 'slot7')
+    .addSeparator()
     .addItem('Which Gmail am I using?', 'whoAmI')
     .addItem('Choose dashboard layout', 'slot4')
     .addItem('Apply colour theme', 'slot2')
@@ -152,7 +156,8 @@ function onOpen() {
       .addItem('Add a team member\'s sheet', 'addTeamSheet')
       .addItem('Check all team sheets now', 'refreshTeam')
       .addItem('Turn on automatic checks (every 2 hours)', 'teamAutoOn')
-      .addItem('Turn off automatic checks', 'teamAutoOff'))
+      .addItem('Turn off automatic checks', 'teamAutoOff')
+      .addItem('Leaderboard: my own numbers are ' + (boardIncludesMe_() ? 'ON' : 'OFF') + ' (click to switch)', 'slot8'))
     .addToUi();
 }
 
@@ -343,6 +348,7 @@ function settingsRules_(st) {
     endHour: function () { return dv().requireNumberBetween(1, 24).setHelpText('An hour from 1 to 24, e.g. 18'); },
     minDelay: function () { return dv().requireNumberBetween(0, 600).setHelpText('Seconds, 0 to 600, e.g. 20'); },
     maxDelay: function () { return dv().requireNumberBetween(0, 600).setHelpText('Seconds, 0 to 600, e.g. 60'); },
+    standard: function () { return dv().requireNumberBetween(0, 100000).setHelpText('A number, e.g. 350 (blank = what your active Gmails can send)'); },
     autoResume: function () { return dv().requireNumberBetween(0, 30).setHelpText('Days, 0 to 30, e.g. 2 (blank = never)'); },
     pace: function () { return dv().requireValueInList(PACES, true); },
     theme: function () { return dv().requireValueInList(THEME_NAMES, true); },
@@ -718,6 +724,8 @@ function buildDashboard_(ss) {
     ['bounceRate', '=IFERROR({bounceAll}/{sentAll},0)'],
     ['bounceRateToday', '=IFERROR({bounceToday}/{sentToday},0)'],
     ['interested', '=COUNTIF(' + LC('Outcome') + ',"Interested")'],
+    ['needOutcome', '=COUNTIFS(' + LC('Status') + ',"Replied",' + LC('Outcome') + ',"")'],
+    ['followUp', '=COUNTIF(' + LC('Outcome') + ',"Interested")+COUNTIF(' + LC('Outcome') + ',"Follow up later")'],
     ['meetings', '=COUNTIF(' + LC('Outcome') + ',"Meeting booked")'],
     ['customers', '=COUNTIF(' + LC('Outcome') + ',"Customer")'],
     ['leads', '=COUNTA(' + LC2('Email') + ')'],
@@ -738,13 +746,16 @@ function buildDashboard_(ss) {
   d.getRange(1, 19, calc.length, 1).setFormulas(calc.map(function (c) { return [X(c[1])]; }));
 
   // header band
-  [[1, 10], [2, 46], [3, 26], [4, 12], [5, 4], [6, 16]].forEach(function (h) { d.setRowHeight(h[0], h[1]); });
+  [[1, 10], [2, 46], [3, 26], [4, 22], [5, 4], [6, 16]].forEach(function (h) { d.setRowHeight(h[0], h[1]); });
   d.getRange(1, 1, 4, 17).setBackground(T.navy);
   d.getRange(5, 1, 1, 17).setBackground(T.gold);
   d.getRange('C2:L2').merge().setValue(BRAND.name).setFontFamily(T.head).setFontSize(24)
     .setFontWeight('bold').setFontColor(T.onNavy).setVerticalAlignment('bottom');
   d.getRange('C3:L3').merge().setFormula(X('=UPPER({campaign})&"   ·   DAY "&{dayNum}&" OF "&{length}'))
     .setFontColor(T.gold2).setFontWeight('bold').setFontSize(9).setVerticalAlignment('top');
+  // Replies waiting on you (Outreach -> Replies: set outcomes & follow-ups)
+  d.getRange('C4:P4').merge().setFormula(X('="📬 "&{needOutcome}&" replies need an outcome   ·   🔁 "&{followUp}&" to follow up   ·   ⭐ "&{interested}&" interested   ·   📅 "&{meetings}&" meetings"'))
+    .setFontColor(T.onNavy).setFontWeight('bold').setFontSize(10).setVerticalAlignment('middle');
   d.getRange('N2:P2').merge().setValue('TODAY').setFontColor(T.soft).setFontSize(8)
     .setHorizontalAlignment('right').setVerticalAlignment('bottom');
   d.getRange('N3:P3').merge().setFormula('=TEXT(TODAY(),"ddd d mmm yyyy")').setFontColor(T.gold2)
@@ -2432,6 +2443,336 @@ function encodeHeader_(s) {
 // ---------------------------------------------------------------- sheet helpers
 
 
+// ---------------------------------------------------------------- replies: outcomes and follow-ups
+
+// Outcomes that mean "this person still needs something from us".
+var FOLLOW_OUTCOMES = ['Interested', 'Follow up later'];
+
+// Outreach -> Replies: one window with every reply that still needs you: set the outcome in one click,
+// no searching the Leads tab. Uses the loader's spare slot 6. The window calls slot6('outcome', ...) to save.
+function slot6(action, leadId, outcome, note) {
+  if (action === 'outcome') return setOutcome_(leadId, outcome, note);
+  askAllPermissions_();
+  var ss = ss_();
+  loadTheme_(ss);
+  var html = HtmlService.createHtmlOutput(repliesHtml_(THEME, repliesData_(ss))).setWidth(980).setHeight(680);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Replies to handle');
+}
+
+// Replies with no outcome yet (newest first), and people to follow up (waiting longest first).
+function repliesData_(ss) {
+  var ld = ss.getSheetByName(SHEET.LEADS);
+  var lc = colMap_(ld);
+  var tz = ss.getSpreadsheetTimeZone();
+  var rows = ld.getLastRow() > 1 ? ld.getRange(2, 1, ld.getLastRow() - 1, ld.getLastColumn()).getValues() : [];
+  var need = [], follow = [];
+  rows.forEach(function (r) {
+    var c = replyCategory_(r, lc);
+    if (!c) return;
+    var at = r[lc['Replied At']];
+    var item = {
+      id: String(r[lc['Lead ID']]), email: normEmail_(r[lc['Email']]),
+      name: [r[lc['First Name']], r[lc['Last Name']]].join(' ').trim(), company: String(r[lc['Company']] || ''),
+      inbox: normEmail_(r[lc['Assigned Inbox']]), snippet: String(r[lc['Reply Snippet']] || ''),
+      notes: String(r[lc['Notes']] || ''), outcome: String(r[lc['Outcome']] || '').trim(),
+      t: at instanceof Date ? at.getTime() : 0,
+      when: at instanceof Date ? Utilities.formatDate(at, tz, 'EEE d MMM, HH:mm') : ''
+    };
+    (c === 'need' ? need : follow).push(item);
+  });
+  need.sort(function (a, b) { return b.t - a.t; });
+  follow.sort(function (a, b) { return a.t - b.t; });
+  return { need: need, follow: follow, outcomes: OUTCOMES };
+}
+
+// 'need' = replied, no outcome yet. 'follow' = Interested or Follow up later. '' = nothing to do.
+function replyCategory_(r, lc) {
+  var status = String(r[lc['Status']] || '').trim();
+  if (status === STATUS.UNSUB || status === STATUS.BOUNCED) return '';
+  if (status !== STATUS.REPLIED && !(r[lc['Replied At']] instanceof Date)) return '';
+  var outcome = String(r[lc['Outcome']] || '').trim();
+  if (!outcome) return 'need';
+  return FOLLOW_OUTCOMES.indexOf(outcome) >= 0 ? 'follow' : '';
+}
+
+// Saves an outcome (and an optional note) chosen in the Replies window, then sends back the new lists.
+function setOutcome_(leadId, outcome, note) {
+  outcome = String(outcome || '').trim();
+  if (outcome && OUTCOMES.indexOf(outcome) < 0) throw new Error('Unknown outcome: ' + outcome);
+  var ss = ss_();
+  var ld = ss.getSheetByName(SHEET.LEADS);
+  var lc = colMap_(ld);
+  var cur = leadRowNow_(ld, lc, leadId, -1);
+  if (!cur) throw new Error('This lead is no longer on the Leads tab.');
+  var up = { 'Outcome': outcome };
+  note = String(note || '').trim();
+  if (note) {
+    var old = String(cur.values[lc['Notes']] || '').trim();
+    up['Notes'] = (old ? old + '\n' : '') + Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone(), 'MMM d') + ': ' + note;
+  }
+  updateLead_(ld, lc, leadId, cur.row, up);
+  log_(ss, me_(), normEmail_(cur.values[lc['Email']]), 'OUTCOME', leadId,
+    (outcome || 'Outcome cleared') + (note ? ' - ' + note : ''), '', '');
+  return repliesData_(ss);
+}
+
+// Puts data into a page safely (no "</script>" can end the script early).
+function jsonForHtml_(o) {
+  return JSON.stringify(o).replace(/</g, '\\u003c');
+}
+
+function repliesHtml_(T, data) {
+  return '<style>body{font-family:Arial,sans-serif;margin:0;padding:4px 10px;color:#1D2333}' +
+    '.tabs{display:flex;gap:8px;margin-bottom:10px}.tab{padding:9px 16px;border-radius:6px;border:2px solid ' + T.line + ';cursor:pointer;font-weight:bold;background:#fff}' +
+    '.tab.on{background:' + T.navy + ';color:' + T.onNavy + ';border-color:' + T.gold + '}' +
+    '.card{border:1px solid ' + T.line + ';border-left:4px solid ' + T.gold + ';border-radius:6px;padding:10px 12px;margin-bottom:10px;background:#fff}' +
+    '.top{display:flex;justify-content:space-between;gap:10px}.who{font-weight:bold;font-size:15px}.meta{color:#666;font-size:12px;margin-top:2px}' +
+    '.snip{background:' + T.ivory + ';border-radius:4px;padding:8px 10px;margin:8px 0;white-space:pre-wrap;font-size:13px;line-height:1.4}' +
+    '.notes{color:#555;font-size:12px;white-space:pre-wrap;margin-bottom:6px}' +
+    '.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}' +
+    '.oc{padding:6px 10px;border:1px solid ' + T.line + ';border-radius:14px;background:#fff;cursor:pointer;font-size:12px}' +
+    '.oc:hover{border-color:' + T.gold + '}.oc.on{background:' + T.gold + ';color:#fff;border-color:' + T.gold + '}' +
+    '.note{flex:1;min-width:180px;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:12px}' +
+    'a{color:' + T.strong + ';font-size:12px;font-weight:bold}.empty{color:#666;padding:30px;text-align:center}' +
+    '#msg{color:' + T.good + ';font-size:12px;margin:0 0 8px;min-height:15px}</style>' +
+    '<div class="tabs"><div class="tab on" id="t-need" onclick="show(\'need\')"></div><div class="tab" id="t-follow" onclick="show(\'follow\')"></div></div>' +
+    '<div id="msg"></div><div id="list"></div>' +
+    '<script>var D=' + jsonForHtml_(data) + ',cur="need";' +
+    'function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e;}' +
+    'function show(w){cur=w;render();}' +
+    'function render(){' +
+    'document.getElementById("t-need").textContent="📬 Need an outcome ("+D.need.length+")";' +
+    'document.getElementById("t-follow").textContent="🔁 To follow up ("+D.follow.length+")";' +
+    'document.getElementById("t-need").className="tab"+(cur=="need"?" on":"");' +
+    'document.getElementById("t-follow").className="tab"+(cur=="follow"?" on":"");' +
+    'var L=document.getElementById("list");L.innerHTML="";var items=D[cur];' +
+    'if(!items.length){L.appendChild(el("div","empty",cur=="need"?"No replies waiting for an outcome. 🎉":"Nobody to follow up right now."));return;}' +
+    'items.forEach(function(it){var c=el("div","card");var top=el("div","top");var left=el("div");' +
+    'left.appendChild(el("div","who",(it.name||it.email)+(it.company?" · "+it.company:"")));' +
+    'left.appendChild(el("div","meta",it.email+"  ·  replied "+(it.when||"(date unknown)")+"  ·  answer from "+(it.inbox||"?")));top.appendChild(left);' +
+    'var a=el("a",null,"Open in Gmail ↗");a.href="https://mail.google.com/mail/?authuser="+encodeURIComponent(it.inbox)+"#search/"+encodeURIComponent("from:"+it.email);a.target="_blank";top.appendChild(a);c.appendChild(top);' +
+    'c.appendChild(el("div","snip",it.snippet||"(no reply text saved)"));if(it.notes)c.appendChild(el("div","notes","Notes: "+it.notes));' +
+    'var row=el("div","row");var note=el("input","note");note.placeholder="Note (optional), e.g. call Tuesday";' +
+    'D.outcomes.forEach(function(o){var b=el("button","oc"+(it.outcome==o?" on":""),o);b.onclick=function(){save(it,o,note.value,c);};row.appendChild(b);});' +
+    'row.appendChild(note);c.appendChild(row);L.appendChild(c);});}' +
+    'function save(it,o,n,c){c.style.opacity=.5;document.getElementById("msg").textContent="Saving...";' +
+    'google.script.run.withSuccessHandler(function(d){D=d;document.getElementById("msg").textContent="Saved: "+(it.name||it.email)+" → "+o;render();})' +
+    '.withFailureHandler(function(e){c.style.opacity=1;document.getElementById("msg").textContent="Could not save: "+(e&&e.message?e.message:e);}).slot6("outcome",it.id,o,n);}' +
+    'render();</script>';
+}
+
+// ---------------------------------------------------------------- 24-hour report
+
+// Outreach -> My last 24 hours: a snapshot of the last 24 hours plus the campaign so far,
+// big enough to read out in a team meeting. Uses the loader's spare slot 7.
+function slot7() {
+  askAllPermissions_();
+  var ss = ss_();
+  loadTheme_(ss);
+  var r = reportData_(ss, new Date());
+  var html = HtmlService.createHtmlOutput(reportHtml_(THEME, r)).setWidth(760).setHeight(720);
+  SpreadsheetApp.getUi().showModalDialog(html, 'My last 24 hours');
+}
+
+// Works everything out from the raw Log, Leads and Inboxes tabs (not the Dashboard).
+function reportData_(ss, now) {
+  var DAY = 86400000, since = new Date(now.getTime() - DAY);
+  var tz = ss.getSpreadsheetTimeZone();
+  var st = readSettings_(ss);
+  var fmt = function (d, f) { return Utilities.formatDate(d, tz, f); };
+  var r = { campaign: st.name, by: me_(), made: fmt(now, 'EEE d MMM yyyy, HH:mm'), from: fmt(since, 'EEE d MMM, HH:mm'),
+            sent24: 0, first24: 0, fu24: 0, replies24: 0, bounces24: 0, sentAll: 0, repliesAll: 0, bouncesAll: 0,
+            leads: 0, waiting: 0, imported24: 0, needOutcome: 0, followUp: 0, interested: 0, meetings: 0,
+            inboxes: [], problems: [] };
+
+  var lg = ss.getSheetByName(SHEET.LOG);
+  if (lg.getLastRow() > 1) {
+    lg.getRange(2, 1, lg.getLastRow() - 1, 4).getValues().forEach(function (x) {
+      var ev = String(x[3]), recent = x[0] instanceof Date && x[0] >= since;
+      if (ev.indexOf('SENT') === 0) {
+        r.sentAll++;
+        if (recent) { r.sent24++; if (ev === 'SENT_1') r.first24++; else r.fu24++; }
+      } else if (ev === 'REPLY' || ev === 'UNSUB') {
+        r.repliesAll++; if (recent) r.replies24++;
+      } else if (ev === 'BOUNCE') {
+        r.bouncesAll++; if (recent) r.bounces24++;
+      }
+    });
+  }
+
+  var ld = ss.getSheetByName(SHEET.LEADS);
+  var lc = colMap_(ld);
+  if (ld.getLastRow() > 1) {
+    ld.getRange(2, 1, ld.getLastRow() - 1, ld.getLastColumn()).getValues().forEach(function (x) {
+      if (!normEmail_(x[lc['Email']])) return;
+      r.leads++;
+      var status = String(x[lc['Status']] || '').trim();
+      if (status === STATUS.NEW) r.waiting++;
+      var imp = x[lc['Imported At']];
+      if (imp instanceof Date && imp >= since) r.imported24++;
+      var c = replyCategory_(x, lc);
+      if (c === 'need') r.needOutcome++;
+      if (c === 'follow') r.followUp++;
+      var oc = String(x[lc['Outcome']] || '').trim();
+      if (oc === 'Interested') r.interested++;
+      if (oc === 'Meeting booked' || oc === 'Customer') r.meetings++;
+    });
+  }
+
+  // Gmails, and the day's standard: what the active Gmails may send today (or the Settings value).
+  var dayIdx = dayIndex_(st.start, now, tz);
+  var capacity = 0;
+  var ib = ss.getSheetByName(SHEET.INBOXES);
+  var ic = colMap_(ib);
+  var ibv = ib.getLastRow() > 1 ? ib.getRange(2, 1, ib.getLastRow() - 1, ib.getLastColumn()).getValues() : [];
+  inboxRows_(ss).forEach(function (i) {
+    var row = ibv[i.row - 2];
+    var connected = /^yes/i.test(String(row[ic['Connected']] || ''));
+    var last = row[ic['Last Run']];
+    var running = last instanceof Date && now - last < STUCK_HOURS * 3600000;
+    var active = isActive_(i.status);
+    if (active) capacity += dailyLimitFor_(i.limit || st.dailyLimit, st, dayIdx);
+    var state = !connected ? 'Not connected' : !active ? i.status : !running ? 'Not running' : 'Sending';
+    r.inboxes.push({ email: i.email, state: state });
+  });
+  r.connected = r.inboxes.filter(function (i) { return i.state !== 'Not connected'; }).length;
+  r.activeInboxes = r.inboxes.filter(function (i) { return i.state === 'Sending'; }).length;
+  r.standard = st.standard > 0 ? st.standard : capacity;
+  r.met = r.standard > 0 && r.sent24 >= r.standard;
+
+  // Why it fell short (only shown when it did)
+  if (!r.met) {
+    if (st.paused) r.problems.push('Sending is paused (Settings -> Pause everything).');
+    if (!r.waiting) r.problems.push('No new leads waiting: upload more leads.');
+    else if (r.waiting < r.standard) r.problems.push('Only ' + r.waiting + ' new leads waiting: not enough for a full day (' + r.standard + ').');
+    if (!r.inboxes.length) r.problems.push('No Gmail connected.');
+    r.inboxes.forEach(function (i) { if (i.state !== 'Sending') r.problems.push(i.email + ': ' + i.state + '.'); });
+    if (!r.problems.length) r.problems.push('Gmails and leads look fine: it may still be catching up (warm-up, send window, or follow-ups not due).');
+  }
+
+  // Goal
+  r.goal = st.goal;
+  r.delivered = Math.max(0, r.sentAll - r.bouncesAll);
+  r.progress = r.goal ? Math.min(1, r.delivered / r.goal) : 0;
+  var daysLeft = Math.max(0, Math.round((st.start.getTime() + st.length * DAY - now.getTime()) / DAY));
+  r.daysLeft = daysLeft;
+  r.perDay = daysLeft ? Math.ceil(Math.max(0, r.goal - r.delivered) / daysLeft) : Math.max(0, r.goal - r.delivered);
+  r.bounce24 = r.sent24 ? r.bounces24 / r.sent24 : 0;
+  r.bounceAll = r.sentAll ? r.bouncesAll / r.sentAll : 0;
+  return r;
+}
+
+// The report as plain text, to paste into WhatsApp or an email.
+function reportText_(r) {
+  var p = function (x) { return (100 * x).toFixed(1) + '%'; };
+  var lines = [
+    '📊 ' + r.campaign + ': last 24 hours',
+    r.from + ' → ' + r.made,
+    '',
+    'LAST 24 HOURS',
+    '• Sent: ' + r.sent24 + ' (' + r.first24 + ' first emails, ' + r.fu24 + ' follow-ups)',
+    '• Daily standard: ' + r.standard + ' → ' + (r.met ? '✅ met' : '❌ not met (' + (r.standard - r.sent24) + ' short)'),
+    '• Replies: ' + r.replies24,
+    '• Bounces: ' + r.bounces24 + ' (' + p(r.bounce24) + ')',
+    '• New leads uploaded: ' + r.imported24,
+    '• New leads waiting: ' + r.waiting
+  ];
+  if (!r.met) lines = lines.concat(['', 'WHY IT FELL SHORT']).concat(r.problems.map(function (x) { return '• ' + x; }));
+  return lines.concat([
+    '',
+    'CAMPAIGN SO FAR',
+    '• Goal: ' + r.delivered + ' of ' + r.goal + ' delivered (' + p(r.progress) + ')' +
+      (r.daysLeft ? ', ' + r.daysLeft + ' days left, ' + r.perDay + ' a day needed' : ''),
+    '• Total sent: ' + r.sentAll,
+    '• Total replies: ' + r.repliesAll,
+    '• Total bounces: ' + r.bouncesAll + ' (' + p(r.bounceAll) + ')',
+    '• Gmails: ' + r.connected + ' connected, ' + r.activeInboxes + ' sending',
+    '• Replies needing an outcome: ' + r.needOutcome,
+    '• To follow up: ' + r.followUp + '   · Interested: ' + r.interested + '   · Meetings: ' + r.meetings
+  ]).join('\n');
+}
+
+function reportHtml_(T, r) {
+  var esc = function (s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
+  var p = function (x) { return (100 * x).toFixed(1) + '%'; };
+  var tile = function (label, value, sub, tone) {
+    return '<div class="tile' + (tone ? ' ' + tone : '') + '"><small>' + esc(label) + '</small><b>' + esc(value) + '</b>' +
+      (sub ? '<i>' + esc(sub) + '</i>' : '') + '</div>';
+  };
+  var bad = r.met ? '' : 'bad';
+  return '<style>body{font-family:Arial,sans-serif;margin:0;padding:0 10px;color:#1D2333}' +
+    '.band{background:' + T.navy + ';color:' + T.onNavy + ';border-bottom:3px solid ' + T.gold + ';padding:12px 16px;border-radius:6px}' +
+    '.band b{font-size:18px}.band div{color:' + T.gold2 + ';font-size:12px;margin-top:3px}' +
+    'h3{margin:16px 0 6px;font-size:13px;letter-spacing:.06em;color:' + T.strong + ';border-bottom:2px solid ' + T.gold + ';padding-bottom:4px}' +
+    '.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}' +
+    '.tile{background:#fff;border:1px solid ' + T.line + ';border-top:3px solid ' + T.gold + ';border-radius:6px;padding:8px;text-align:center}' +
+    '.tile small{display:block;font-size:10px;font-weight:bold;color:' + T.muted + ';text-transform:uppercase}' +
+    '.tile b{display:block;font-size:28px;color:' + T.strong + ';margin:2px 0}.tile i{font-style:normal;font-size:11px;color:#666}' +
+    '.tile.good{border-top-color:' + T.good + '}.tile.good b{color:' + T.good + '}.tile.bad{border-top-color:' + T.bad + '}.tile.bad b{color:' + T.bad + '}' +
+    '.why{background:#FCEDEB;border-left:4px solid ' + T.bad + ';padding:8px 12px;border-radius:4px;font-size:13px;margin-top:8px}.why li{margin:3px 0}' +
+    '.track{height:12px;background:' + T.track + ';border-radius:6px;overflow:hidden;margin:6px 0 2px}.track i{display:block;height:100%;background:' + T.gold + '}' +
+    '.btn{background:' + T.navy + ';color:' + T.onNavy + ';border:2px solid ' + T.gold + ';border-radius:4px;padding:9px 18px;font-weight:bold;cursor:pointer}' +
+    'textarea{position:absolute;left:-9999px}#msg{margin-left:10px;color:' + T.good + ';font-size:12px}</style>' +
+    '<div class="band"><b>📊 ' + esc(r.campaign) + '</b><div>Last 24 hours: ' + esc(r.from) + ' → ' + esc(r.made) + '   ·   ' + esc(r.by) + '</div></div>' +
+    '<h3>LAST 24 HOURS</h3><div class="grid">' +
+    tile('Sent', r.sent24, r.first24 + ' first · ' + r.fu24 + ' follow-ups', bad || 'good') +
+    tile('Daily standard', r.standard, r.met ? '✅ Met' : '❌ ' + (r.standard - r.sent24) + ' short', bad || 'good') +
+    tile('Replies', r.replies24, '') +
+    tile('Bounces', r.bounces24, p(r.bounce24) + ' of sent', r.bounce24 > 0.03 ? 'bad' : '') +
+    '</div><div class="grid" style="margin-top:8px">' +
+    tile('New leads waiting', r.waiting, 'on the ground now', !r.met && r.waiting < r.standard ? 'bad' : '') +
+    tile('Leads uploaded', r.imported24, 'in the last 24 hours') +
+    tile('Need an outcome', r.needOutcome, 'replies not marked yet', r.needOutcome ? 'bad' : '') +
+    tile('To follow up', r.followUp, r.interested + ' interested') +
+    '</div>' +
+    (r.met ? '' : '<div class="why"><b>Why it fell short</b><ul>' + r.problems.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>') +
+    '<h3>CAMPAIGN SO FAR</h3>' +
+    '<div style="font-size:13px"><b>Goal:</b> ' + r.delivered + ' of ' + r.goal + ' delivered (' + p(r.progress) + ')' +
+    (r.daysLeft ? ' · ' + r.daysLeft + ' days left · ' + r.perDay + ' a day needed' : '') + '</div>' +
+    '<div class="track"><i style="width:' + Math.round(100 * r.progress) + '%"></i></div>' +
+    '<div class="grid" style="margin-top:8px">' +
+    tile('Total sent', r.sentAll, '') +
+    tile('Total replies', r.repliesAll, r.meetings + ' meetings') +
+    tile('Total bounces', r.bouncesAll, p(r.bounceAll), r.bounceAll > 0.03 ? 'bad' : '') +
+    tile('Gmails', r.connected, r.activeInboxes + ' sending now', r.activeInboxes < r.connected ? 'bad' : '') +
+    '</div>' +
+    '<p style="margin-top:14px"><button class="btn" onclick="copy()">Copy as text (WhatsApp / email)</button><span id="msg"></span></p>' +
+    '<textarea id="txt">' + esc(reportText_(r)) + '</textarea>' +
+    '<script>function copy(){var t=document.getElementById("txt");t.select();var ok=false;try{ok=document.execCommand("copy");}catch(e){}' +
+    'if(!ok&&navigator.clipboard){navigator.clipboard.writeText(t.value).then(function(){m("Copied.");},function(){m("Select and copy: the text could not be copied automatically.");});return;}' +
+    'm(ok?"Copied. Paste it into WhatsApp or an email.":"Could not copy automatically.");}function m(s){document.getElementById("msg").textContent=s;}</script>';
+}
+
+// ---------------------------------------------------------------- admin: own numbers on the Leaderboard
+
+// Admin -> Leaderboard: add or remove my own numbers. Uses the loader's spare slot 8.
+function slot8() {
+  askAllPermissions_();
+  if (notAdmin_()) return;
+  var props = PropertiesService.getScriptProperties();
+  var on = props.getProperty('BOARD_ME') === 'on';
+  var ui = ui_();
+  if (!on) {
+    var name = props.getProperty('BOARD_ME_NAME') || '';
+    if (ui) {
+      var a = ui.prompt('Add your own numbers to the Leaderboard',
+        'What name should show for you? (e.g. "Simeon (admin)")' + (name ? '\nLeave empty to keep "' + name + '".' : ''),
+        ui.ButtonSet.OK_CANCEL);
+      if (a.getSelectedButton() !== ui.Button.OK) return;
+      name = a.getResponseText().trim() || name;
+    }
+    props.setProperties({ BOARD_ME: 'on', BOARD_ME_NAME: name || 'Admin (me)' });
+  } else {
+    props.setProperty('BOARD_ME', 'off');
+  }
+  alert_((on ? 'Your own numbers are now OFF the Leaderboard.' : 'Your own numbers are now ON the Leaderboard.') +
+    '\n\n' + refreshTeam_() + '\n\nReload the sheet to see the new menu label.');
+}
+
+function boardIncludesMe_() {
+  try { return PropertiesService.getScriptProperties().getProperty('BOARD_ME') === 'on'; } catch (e) { return false; }
+}
+
 // ---------------------------------------------------------------- admin: watch team sheets
 // For the admin's own master sheet. Each team member shares their master sheet with the
 // admin (Viewer is enough). The admin pastes the links into the Team tab. The script reads
@@ -2590,6 +2931,15 @@ function refreshTeam_() {
     r.__id = id;
   });
 
+  // The admin's own numbers, when switched on (Admin -> Leaderboard: my own numbers).
+  if (boardIncludesMe_()) {
+    try {
+      var mine = analyzeTeam_(readTeamData_(ss), null, now, todayStart);
+      board.push({ name: '⭐ ' + (PropertiesService.getScriptProperties().getProperty('BOARD_ME_NAME') || 'Admin (me)'),
+                   stats: mine.stats, status: teamStatus_(mine.flags) });
+    } catch (e) { console.log('Own numbers: ' + e.message); }
+  }
+
   if (alertRows.length) alertsSh.getRange(alertsSh.getLastRow() + 1, 1, alertRows.length, alertRows[0].length).setValues(alertRows);
   if (histRows.length) hist.getRange(hist.getLastRow() + 1, 1, histRows.length, histRows[0].length).setValues(histRows);
 
@@ -2632,9 +2982,9 @@ function buildLeaderboard_(ss, board, now) {
   sh.setHiddenGridlines(true);
   sh.setTabColor(T.gold);
   var heads = ['Rank', 'Name', 'Leads', 'Sent today', 'Sent (7 days)', 'Total sent', 'Replies', 'Reply %',
-               'Bounces', 'Bounce %', 'Meetings', 'Status'];
+               'Bounces', 'Bounce %', 'Meetings', 'Need outcome', 'To follow up', 'Status'];
   var W = heads.length;
-  var widths = [70, 200, 90, 100, 110, 110, 90, 90, 90, 90, 100, 130];
+  var widths = [70, 200, 90, 100, 110, 110, 90, 90, 90, 90, 100, 110, 110, 130];
   widths.forEach(function (w, i) { sh.setColumnWidth(i + 1, w); });
 
   board.sort(function (a, b) {
@@ -2644,13 +2994,13 @@ function buildLeaderboard_(ss, board, now) {
   var rows = board.map(function (e, i) {
     var t = e.stats;
     return [medal[i] || String(i + 1), e.name, t.leads || 0, t.sentToday, t.sent7, t.totalSent, t.replies,
-            t.replyPct, t.bounced || 0, t.bouncePct, t.meetings, e.status];
+            t.replyPct, t.bounced || 0, t.bouncePct, t.meetings, t.needOutcome || 0, t.followUp || 0, e.status];
   });
   var sum = function (k) { return board.reduce(function (s, e) { return s + (Number(e.stats[k]) || 0); }, 0); };
   var emailed = sum('emailed');
   var totals = ['', 'TEAM TOTAL', sum('leads'), sum('sentToday'), sum('sent7'), sum('totalSent'), sum('replies'),
                 emailed ? sum('replies') / emailed : 0, sum('bounced'), emailed ? sum('bounced') / emailed : 0,
-                sum('meetings'), board.length + ' people'];
+                sum('meetings'), sum('needOutcome'), sum('followUp'), board.length + ' people'];
 
   sh.getRange(1, 1, 2, W).setBackground(T.navy);
   sh.setRowHeight(1, 44); sh.setRowHeight(2, 26);
@@ -2731,7 +3081,7 @@ function analyzeTeam_(d, prev, now, todayStart) {
     if (missingCols.length) add('red', 'cols', 'Leads columns deleted or renamed: ' + missingCols.join(', '), HOW_REPAIR);
   }
   var s = { leads: 0, waiting: 0, totalSent: 0, emailed: 0, replies: 0, bounced: 0, meetings: 0,
-            resetToNew: 0, handReplied: 0, dupes: 0 };
+            resetToNew: 0, handReplied: 0, dupes: 0, needOutcome: 0, followUp: 0 };
   var seen = {};
   for (var r = 1; r < leads.length; r++) {
     var row = leads[r];
@@ -2754,6 +3104,9 @@ function analyzeTeam_(d, prev, now, todayStart) {
     if (status === STATUS.BOUNCED) s.bounced++;
     var oc = String(row[lh['Outcome']] || '');
     if (oc === 'Meeting booked' || oc === 'Customer') s.meetings++;
+    var rc = replyCategory_(row, lh);
+    if (rc === 'need') s.needOutcome++;
+    if (rc === 'follow') s.followUp++;
   }
 
   // Log
@@ -2845,7 +3198,8 @@ function analyzeTeam_(d, prev, now, todayStart) {
     stats: { leads: s.leads, bounced: s.bounced, emailed: s.emailed,
              sentToday: sentToday, sent7: sent7, totalSent: s.totalSent, bouncePct: bouncePct,
              replies: s.replies, replyPct: s.emailed ? s.replies / s.emailed : 0, meetings: s.meetings,
-             waiting: s.waiting, activeInboxes: active, inboxes: inboxes, lastSent: lastSent },
+             waiting: s.waiting, activeInboxes: active, inboxes: inboxes, lastSent: lastSent,
+             needOutcome: s.needOutcome, followUp: s.followUp },
     snapshot: { leads: s.leads, waiting: s.waiting, totalSent: s.totalSent, logRows: logRows,
                 logSends: logSends, replies: s.replies, bounced: s.bounced, dnc: dnc }
   };
@@ -2968,6 +3322,7 @@ function settingsFromValues_(values) {
   s.bouncePause = num(s.bouncePause, 0.05);
   if (s.bouncePause > 1) s.bouncePause = s.bouncePause / 100;
   s.autoResume = s.autoResume === '' ? 0 : num(s.autoResume, 0);
+  s.standard = s.standard === '' ? 0 : num(s.standard, 0);
   s.pace = /fast/i.test(String(s.pace)) ? 'Fast' : 'Steady';
   s.autoMove = toBool_(s.autoMove);
   s.weekends = toBool_(s.weekends);

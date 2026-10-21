@@ -168,6 +168,7 @@ Status back to New (or In sequence for a follow-up). Other leads keep sending in
 | Send on weekends | TRUE | |
 | Signature | `{{sender_name}}` | Each Gmail signs with its own name |
 | Opt-out line | (a P.S. line) | Added to every email |
+| Daily standard (emails sent per day) | (blank) | What "My last 24 hours" checks against. Blank = what your active Gmails can send today |
 | Pause everything | FALSE | Set to TRUE to stop all sending |
 
 ## Replies
@@ -177,14 +178,38 @@ its follow-ups, and gets the Gmail label **Outreach Replies**.
 "Stop" or "remove me" replies go to Do Not Contact automatically.
 
 **Answer replies yourself**, from the Gmail in the lead's **Assigned Inbox**, the same day.
-Then set the **Outcome** (Interested, Meeting booked, Not interested).
+
+**Set outcomes without searching the Leads tab:** **📧 Outreach → Replies: set outcomes & follow-ups**.
+It has two lists:
+- **📬 Need an outcome:** every reply you haven't marked yet, newest first, with what they wrote.
+- **🔁 To follow up:** everyone marked **Interested** or **Follow up later**, waiting longest first.
+
+Click an outcome (Interested, Meeting booked, Not interested...) and it's saved to the lead. Type a note first
+(e.g. "call Tuesday") to add it to the lead's Notes. **Open in Gmail** opens that person's emails in the right Gmail.
+When a follow-up turns into a meeting, click **Meeting booked** and it leaves the list.
+
+The Dashboard's top band shows how many replies need an outcome and how many are waiting to be followed up.
 
 ## Daily routine (10 minutes)
 
 1. **Dashboard:** on pace? Bounce rate under 2%?
 2. **Inboxes:** any 🟡 or 🔴? Read **Last Result**.
-3. **Leads:** filter Status = **Replied**. Answer them, set Outcome.
+3. **📧 Outreach → Replies: set outcomes & follow-ups.** Answer them, click the outcome. Then the To follow up list.
 4. Running low on New leads? Make and upload a new batch.
+
+## Team meeting: "My last 24 hours"
+
+**📧 Outreach → My last 24 hours (report)** shows a snapshot of exactly the last 24 hours, up to the minute you
+click it, so everyone can read their numbers out:
+- **Last 24 hours:** emails sent (first emails and follow-ups), the daily standard ✅ met or ❌ how many short,
+  replies, bounces, new leads uploaded.
+- **New leads waiting.** If the standard wasn't met it also says **why**: no leads left, a Gmail paused or not
+  running, or sending paused.
+- **Campaign so far:** progress to the goal, days left and how many a day are needed, total sent, total replies,
+  total bounces, Gmails connected and sending, replies needing an outcome, people to follow up.
+
+**Copy as text** copies it all, ready to paste into WhatsApp or an email.
+The numbers come from the Log and Leads tabs, so they're the same whenever anyone clicks.
 
 ## Rules for free Gmails
 
@@ -258,6 +283,11 @@ The history is stored in **your** sheet, so they can't change it.
 - 🟡 Daily limit above 35, warm-up off, opt-out line removed, follow-ups off, sending paused.
 - 🟡 Leads set back to New after being emailed, leads marked Replied by hand, duplicate leads.
 - 🟡 High bounce rate, Gmails paused, nothing sent in 24 hours, no leads waiting.
+
+**Your own numbers on the Leaderboard:** **📧 Outreach → Admin: watch team sheets → Leaderboard: my own
+numbers are OFF (click to switch)**. Type the name to show (e.g. "Simeon (admin)"). Your sheet joins the
+ranking with a ⭐. Click it again to take yourself off. Either way the Leaderboard is rebuilt straight away.
+The Leaderboard also shows each person's **Need outcome** and **To follow up** counts.
 
 **Making someone else an admin:**
 - **To let them see everything:** share your master sheet with them as **Viewer**.
