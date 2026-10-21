@@ -35,7 +35,7 @@ if (typeof OUTREACH_CONFIG === 'object' && OUTREACH_CONFIG) {
 
 // Change this every time you publish a new version, so you can see who has it
 // (Outreach -> Which Gmail am I using?).
-var CORE_VERSION = '2026-10-29';
+var CORE_VERSION = '2026-10-21';
 
 // ---------------------------------------------------------------- admins
 // Only these Gmails can use "Outreach -> Admin: watch team sheets".
@@ -62,10 +62,13 @@ var STATUS = {
   BOUNCED: 'Bounced',
   UNSUB: 'Unsubscribed',
   SKIPPED: 'Do not contact',
-  NEEDS: 'Needs message'
+  NEEDS: 'Needs message',
+  FAILED: 'Send failed'
 };
 var STATUS_LIST = [STATUS.NEW, STATUS.NEEDS, STATUS.ACTIVE, STATUS.DONE, STATUS.REPLIED,
-                   STATUS.BOUNCED, STATUS.UNSUB, STATUS.SKIPPED];
+                   STATUS.BOUNCED, STATUS.UNSUB, STATUS.SKIPPED, STATUS.FAILED];
+
+var PACES = ['Steady', 'Fast'];
 
 var OUTCOMES = ['Interested', 'Meeting booked', 'Not interested',
                 'Wrong person', 'Follow up later', 'Customer'];
@@ -109,7 +112,10 @@ var SETTINGS_DEF = [
   { key: 'weekends', label: 'Send on weekends', value: true, note: 'TRUE or FALSE.' },
   { key: 'minDelay', label: 'Min seconds between emails', value: 20, note: 'Random pause between sends looks more human.' },
   { key: 'maxDelay', label: 'Max seconds between emails', value: 60, note: '' },
-  { key: 'bouncePause', label: 'Auto-pause inbox at bounce rate', value: 0.05, note: 'An inbox stops sending if bounces reach this rate (after 20 sends).' },
+  { key: 'bouncePause', label: 'Auto-pause inbox at bounce rate', value: 0.05, note: 'An inbox stops sending if bounces reach this rate. Only its last 7 days count (at least 20 sends), and only sends since it was last turned back on.' },
+  { key: 'autoResume', label: 'Restart a Gmail paused for bounces after (days)', value: 2, note: 'It restarts slowly (warm-up from day 1). After 3 pauses in 14 days it stays paused until you set it to Active. Leave blank to never restart by itself.', added: true },
+  { key: 'pace', label: 'Sending pace', value: 'Steady', note: 'Steady = spread across the send window (safest). Fast = each Gmail sends its daily limit as soon as it can, usually within 1 to 2 hours.', added: true },
+  { key: 'autoMove', label: 'Move waiting leads off stuck Gmails', value: true, note: 'TRUE = a working Gmail takes over New leads from a Gmail that is paused, removed, or has not run for 3 hours.', added: true },
   { key: 'signature', label: 'Signature (added under every email)', value: '{{sender_name}}', note: 'Each Gmail signs with its own Sender Name. Leave blank if your messages already end with a name.' },
   { key: 'defSubject', label: 'Default subject (if a lead has none)', value: 'Quick question, {{first_name|there}}', note: 'Only used when the Subject column is empty.' },
   { key: 'defFu1', label: 'Default follow-up 1 (if a lead has none)', value: 'Hi {{first_name|there}}, just bumping this to the top of your inbox in case it got buried. Would it make sense to chat?', note: 'Only used when the lead has no Follow-up 1 Message. Leave blank to skip.' },
@@ -337,6 +343,8 @@ function settingsRules_(st) {
     endHour: function () { return dv().requireNumberBetween(1, 24).setHelpText('An hour from 1 to 24, e.g. 18'); },
     minDelay: function () { return dv().requireNumberBetween(0, 600).setHelpText('Seconds, 0 to 600, e.g. 20'); },
     maxDelay: function () { return dv().requireNumberBetween(0, 600).setHelpText('Seconds, 0 to 600, e.g. 60'); },
+    autoResume: function () { return dv().requireNumberBetween(0, 30).setHelpText('Days, 0 to 30, e.g. 2 (blank = never)'); },
+    pace: function () { return dv().requireValueInList(PACES, true); },
     theme: function () { return dv().requireValueInList(THEME_NAMES, true); },
     layout: function () { return dv().requireValueInList(LAYOUT_NAMES, true); }
   };
@@ -344,7 +352,7 @@ function settingsRules_(st) {
     var def = SETTINGS_DEF.filter(function (d) { return d.label === String(l[0]).trim(); })[0];
     if (!def) return;
     var cell = st.getRange(i + 2, 2);
-    if (def.key === 'weekends' || def.key === 'paused') {
+    if (def.key === 'weekends' || def.key === 'paused' || def.key === 'autoMove') {
       cell.setValue(toBool_(cell.getValue()));
       cell.setDataValidation(dv().requireCheckbox().build());
     } else if (rules[def.key]) {
@@ -547,8 +555,9 @@ function writeInboxFormulas_(ib) {
       ',Leads!$' + L['Status'] + ':$' + L['Status'] + ',"New")'; },
     'Health': function (a, r) {
       var st = col('Status') + r, tot = col('Total Sent') + r, bp = col('Bounce %') + r;
-      return 'IF(' + st + '<>"Active","⏸ "&' + st + ',IF(' + tot + '<10,"⚪ Too early to tell",' +
-        'IF(' + bp + '>=0.05,"🔴 High bounces",IF(' + bp + '>=0.02,"🟡 Watch","🟢 Healthy"))))';
+      // Red only while paused for bounces: a Gmail turned back on is judged on its new sends.
+      return 'IF(' + st + '="Paused - bounces","🔴 Paused: high bounces",IF(' + st + '<>"Active","⏸ "&' + st +
+        ',IF(' + tot + '<10,"⚪ Too early to tell",IF(' + bp + '>=0.02,"🟡 Watch (bounces)","🟢 Healthy"))))';
     }
   };
   Object.keys(formulas).forEach(function (h) {
@@ -572,7 +581,8 @@ function sheetLetters_(sh) {
 function addStatusColors_(ld, lc) {
   var col = colLetter_(lc['Status'] + 1);
   var range = ld.getRange(2, 1, ld.getMaxRows() - 1, ld.getLastColumn());
-  var colours = [STATUS.REPLIED, STATUS.BOUNCED, STATUS.UNSUB, STATUS.SKIPPED, STATUS.NEEDS, STATUS.DONE];
+  var colours = [STATUS.REPLIED, STATUS.BOUNCED, STATUS.UNSUB, STATUS.SKIPPED, STATUS.NEEDS, STATUS.DONE,
+                 STATUS.FAILED];
   var rules = colours.map(function (st) {
     return SpreadsheetApp.newConditionalFormatRule()
       .whenFormulaSatisfied('=$' + col + '2="' + st + '"')
@@ -646,7 +656,8 @@ var STATUS_STYLE = {
   'New': ['#EEF1FA', '#13204A'], 'Needs message': ['#FCF1D6', '#7A5C00'],
   'In sequence': ['#E3E8F7', '#13204A'], 'Completed': ['#F6F0DC', '#7A5C00'],
   'Replied': ['#DCEFE4', '#1E6B45'], 'Bounced': ['#F7DEDA', '#9B2C22'],
-  'Unsubscribed': ['#ECECEC', '#555555'], 'Do not contact': ['#ECECEC', '#555555']
+  'Unsubscribed': ['#ECECEC', '#555555'], 'Do not contact': ['#ECECEC', '#555555'],
+  'Send failed': ['#F7DEDA', '#9B2C22']
 };
 var LOGO_PNG_B64 = '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';
 
@@ -1823,18 +1834,16 @@ function connectInbox() {
     setInboxCell_(ss, inbox.row, 'Sender Name', SENDER_NAME);
   }
 
-  ScriptApp.getProjectTriggers().forEach(function (t) {
-    if (t.getHandlerFunction() === 'runForMe') ScriptApp.deleteTrigger(t);
-  });
-  ScriptApp.newTrigger('runForMe').timeBased().everyHours(1).create();
+  setRunTrigger_();
 
   setInboxCell_(ss, inbox.row, 'Connected', 'Yes, ' +
     Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone(), 'yyyy-MM-dd HH:mm'));
+  setInboxCell_(ss, inbox.row, 'Last Run', new Date());   // so no other Gmail takes its leads before its first run
   if (inbox.status !== 'Active') setInboxCell_(ss, inbox.row, 'Status', 'Active');
-  log_(ss, me, '', 'CONNECTED', '', 'Hourly sending turned on', '', '');
+  log_(ss, me, '', 'CONNECTED', '', 'Sending turned on (every ' + RUN_EVERY_MINUTES + ' minutes)', '', '');
 
   var st = readSettings_(ss);
-  alert_('Connected: ' + me + '\n\nIt will now run every hour between ' + st.startHour + ':00 and ' +
+  alert_('Connected: ' + me + '\n\nIt will now run every ' + RUN_EVERY_MINUTES + ' minutes between ' + st.startHour + ':00 and ' +
     st.endHour + ':00, sending only the leads assigned to it, and checking for replies and bounces.' +
     '\n\nTip: click "Spread waiting leads across inboxes" after connecting new Gmails.');
 }
@@ -1852,7 +1861,8 @@ function disconnectInbox() {
     setInboxCell_(ss, inbox.row, 'Connected', 'No');
     setInboxCell_(ss, inbox.row, 'Status', 'Paused');
   }
-  log_(ss, me, '', 'DISCONNECTED', '', 'Hourly sending turned off', '', '');
+  PropertiesService.getScriptProperties().deleteProperty('RUN_EVERY');
+  log_(ss, me, '', 'DISCONNECTED', '', 'Sending turned off', '', '');
   alert_(n ? 'Stopped. ' + me + ' will not send any more emails.' : 'This Gmail was not connected.');
 }
 
@@ -1868,18 +1878,51 @@ function viaLoader_() {
   return typeof OUTREACH_CONFIG === 'object' && !!OUTREACH_CONFIG;
 }
 
-// ---------------------------------------------------------------- the hourly run
+// ---------------------------------------------------------------- the regular run
 
-function runForMe() { runAndRecord_(); }
+// Each Gmail runs every 15 minutes: new leads start going out within 15 minutes, and one
+// slow or failed run only costs 15 minutes instead of an hour.
+var RUN_EVERY_MINUTES = 15;
+var REPLY_CHECK_MINUTES = 25;   // replies & bounces are checked at most this often (Run now always checks)
+var RUN_BUDGET_MS = 270000;     // stop starting new work after 4.5 minutes (Google stops a run at 6)
+var REPLY_BUDGET_MS = 90000;    // the reply check gets at most 1.5 minutes, so sending always gets a turn
+var STUCK_HOURS = 3;            // a Gmail with no run for this long counts as stuck
+var MAX_SEND_TRIES = 2;         // a lead that fails this often is set to "Send failed" instead of blocking the queue
+var QUOTA_ERROR = /limit|quota|too many|rate/i;
 
-function runNow() { askAllPermissions_(); alert_(runAndRecord_()); }
+function runForMe() { ensureRunTrigger_(); runAndRecord_(false); }
+
+function runNow() { askAllPermissions_(); alert_(runAndRecord_(true)); }
+
+// Gmails connected with an older version run once an hour. This moves them to every 15 minutes.
+function ensureRunTrigger_() {
+  if (PropertiesService.getScriptProperties().getProperty('RUN_EVERY') === String(RUN_EVERY_MINUTES)) return;
+  try { setRunTrigger_(); } catch (e) { console.log('Could not change the trigger: ' + e.message); }
+}
+
+// Makes the new trigger first, then removes the old ones, so a Gmail is never left without one.
+function setRunTrigger_() {
+  var fresh = ScriptApp.newTrigger('runForMe').timeBased().everyMinutes(RUN_EVERY_MINUTES).create();
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'runForMe' && t.getUniqueId() !== fresh.getUniqueId()) ScriptApp.deleteTrigger(t);
+  });
+  PropertiesService.getScriptProperties().setProperty('RUN_EVERY', String(RUN_EVERY_MINUTES));
+}
 
 // Runs one round and writes what happened into the Inboxes tab (Last Result),
 // so you can always see why a Gmail did or did not send.
-function runAndRecord_() {
+function runAndRecord_(forceCheck) {
+  var stamp = function (ss) { return Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone(), 'MMM d HH:mm'); };
+  // Written first: if Google cuts the run off, this stays and says so.
+  try {
+    var ss0 = ss_();
+    var inbox0 = findInbox_(ss0, me_());
+    if (inbox0) setInboxCell_(ss0, inbox0.row, 'Last Result', stamp(ss0) +
+      ' - Started, did not finish (Google stopped the run). It tries again in ' + RUN_EVERY_MINUTES + ' minutes.');
+  } catch (e0) { /* the run below reports the problem */ }
   var result;
   try {
-    result = runForInbox_();
+    result = runForInbox_(forceCheck);
   } catch (e) {
     result = 'ERROR: ' + e.message;
     try { log_(ss_(), me_(), '', 'ERROR', '', 'Run failed: ' + e.message, '', ''); } catch (e2) { /* ignore */ }
@@ -1887,10 +1930,7 @@ function runAndRecord_() {
   try {
     var ss = ss_();
     var inbox = findInbox_(ss, me_());
-    if (inbox) {
-      setInboxCell_(ss, inbox.row, 'Last Result',
-        Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone(), 'MMM d HH:mm') + ' - ' + result);
-    }
+    if (inbox) setInboxCell_(ss, inbox.row, 'Last Result', stamp(ss) + ' - ' + result);
   } catch (e3) { /* ignore */ }
   return result;
 }
@@ -1903,7 +1943,8 @@ function checkNow() {
   alert_(checkInbox_(ss, me_(), st));
 }
 
-function runForInbox_() {
+function runForInbox_(forceCheck) {
+  var started = Date.now();
   var me = me_();
   var userLock = LockService.getUserLock();
   if (!userLock.tryLock(5000)) return 'A run for this Gmail is already in progress.';
@@ -1914,63 +1955,138 @@ function runForInbox_() {
     var st = readSettings_(ss);
     var inbox = findInbox_(ss, me);
     if (!inbox) return me + ' is not on the Inboxes tab. Use "Connect THIS Gmail" first.';
-    setInboxCell_(ss, inbox.row, 'Last Run', new Date());
-
-    var checked = checkInbox_(ss, me, st);
-    if (st.paused) return 'Paused (Settings -> Pause everything). ' + checked;
-    if (inbox.status !== 'Active') return 'Inbox status is "' + inbox.status + '". ' + checked;
-
     var now = new Date();
-    var hour = Number(Utilities.formatDate(now, tz, 'H'));
-    var dow = Number(Utilities.formatDate(now, tz, 'u')); // 1 = Mon ... 7 = Sun
-    if (!st.weekends && dow >= 6) return 'Weekend, not sending. ' + checked;
-    if (hour < st.startHour || hour >= st.endHour) {
-      return 'Outside the send window (' + st.startHour + ':00-' + st.endHour + ':00). ' + checked;
+    setInboxCell_(ss, inbox.row, 'Last Run', now);
+    var scan = logScan_(ss, me, now);
+    var notes = [];
+    var resumed = function () { scan.lastResume = now; scan.recentSent = 0; scan.recentBounces = 0; };
+
+    // Paused for bounces: restart by itself after the cool-down, unless it keeps happening.
+    if (isBouncePaused_(inbox.status) && scan.lastPause) {
+      var restartAt = new Date(scan.lastPause.getTime() + st.autoResume * 86400000);
+      if (scan.pauses14 >= 3) {
+        notes.push('Paused for bounces ' + scan.pauses14 + ' times in 14 days, so it will not restart by itself. ' +
+          'Check your lead lists with an email checker, then set Status to Active.');
+      } else if (st.autoResume > 0 && now >= restartAt) {
+        setInboxCell_(ss, inbox.row, 'Status', 'Active');
+        log_(ss, me, '', 'INBOX_RESUMED', '', 'Restarted automatically after the bounce pause (warm-up from day 1)', '', '');
+        inbox.status = 'Active';
+        resumed();
+        notes.push('Restarted automatically after the bounce pause, warming up again.');
+      } else if (st.autoResume > 0) {
+        notes.push('Restarts by itself on ' + Utilities.formatDate(restartAt, tz, 'MMM d HH:mm') + '.');
+      }
+    } else if (isActive_(inbox.status) && scan.lastPause && !(scan.lastResume >= scan.lastPause)) {
+      // Set back to Active by hand: from now on it is judged on its new sends only.
+      log_(ss, me, '', 'INBOX_RESUMED', '', 'Turned back on by hand (warm-up from day 1)', '', '');
+      resumed();
     }
 
-    var stats = inboxStats_(ss, me);
-    if (stats.totalSent >= 20 && stats.bounces / stats.totalSent >= st.bouncePause) {
+    var checked = '';
+    var props = PropertiesService.getScriptProperties();
+    if (forceCheck || Date.now() - Number(props.getProperty('LAST_REPLY_CHECK') || 0) >= REPLY_CHECK_MINUTES * 60000) {
+      try {
+        checked = checkInbox_(ss, me, st, scan.seen, Date.now() + REPLY_BUDGET_MS);
+        props.setProperty('LAST_REPLY_CHECK', String(Date.now()));
+      } catch (e) {
+        // A failed reply check must never stop the sending.
+        checked = 'Reply check failed (' + e.message + '), it tries again next run.';
+        log_(ss, me, '', 'ERROR', '', 'Reply check failed: ' + e.message, '', '');
+      }
+    }
+    var done = function (msg) { return [msg].concat(notes, checked ? [checked] : []).join(' '); };
+
+    if (st.paused) return done('Paused (Settings -> Pause everything).');
+    if (!isActive_(inbox.status)) return done('Inbox status is "' + inbox.status + '".');
+
+    var hour = Number(Utilities.formatDate(now, tz, 'H'));
+    var minute = Number(Utilities.formatDate(now, tz, 'm'));
+    var dow = Number(Utilities.formatDate(now, tz, 'u')); // 1 = Mon ... 7 = Sun
+    if (!st.weekends && dow >= 6) return done('Weekend, not sending.');
+    if (hour < st.startHour || hour >= st.endHour) {
+      return done('Outside the send window (' + st.startHour + ':00-' + st.endHour + ':00).');
+    }
+
+    // Only recent sends count: the last 7 days, and nothing from before it was last turned back on.
+    if (scan.recentSent >= 20 && scan.recentBounces / scan.recentSent >= st.bouncePause) {
+      var pct = Math.round(100 * scan.recentBounces / scan.recentSent);
       setInboxCell_(ss, inbox.row, 'Status', 'Paused - bounces');
-      log_(ss, me, '', 'INBOX_PAUSED', '', 'Bounce rate ' +
-        Math.round(100 * stats.bounces / stats.totalSent) + '%', '', '');
-      return 'Paused this inbox: too many bounces. ' + checked;
+      log_(ss, me, '', 'INBOX_PAUSED', '', 'Bounce rate ' + pct + '% (' + scan.recentBounces + ' of the last ' +
+        scan.recentSent + ' sends)', '', '');
+      return done('Paused this inbox: ' + pct + '% of its recent emails bounced.' +
+        (st.autoResume > 0 ? ' It restarts by itself in ' + st.autoResume + ' day(s).' : ''));
     }
 
     var limit = dailyLimitFor_(inbox.limit || st.dailyLimit, st, dayIndex_(st.start, now, tz));
-    var remaining = limit - stats.sentToday;
-    if (remaining <= 0) return 'Daily limit reached (' + limit + '). ' + checked;
-    var quota = runQuota_(remaining, hour, st.endHour);
+    // Turned back on within a week of a bounce pause: warm up again from day 1.
+    if (scan.lastResume && scan.lastPause && scan.lastResume - scan.lastPause < 7 * 86400000) {
+      limit = dailyLimitFor_(limit, st, dayIndex_(scan.lastResume, now, tz));
+    }
+    var remaining = limit - scan.sentToday;
+    if (remaining <= 0) return done('Daily limit reached (' + limit + ').');
+    var quota = st.pace === 'Fast' ? remaining
+      : runQuota_(remaining, hour * 60 + minute, st.endHour * 60, RUN_EVERY_MINUTES);
 
     var ld = ss.getSheetByName(SHEET.LEADS);
     var lc = colMap_(ld);
     var data = ld.getDataRange().getValues();
     var dnc = loadDnc_(ss);
     var maxSteps = 1 + st.followUps;
-    var due = [], fresh = [];
+    var stuck = st.autoMove ? stuckChecker_(ss, me, now) : null;
+    var due = [], fresh = [], spare = [];
     for (var i = 1; i < data.length; i++) {
       var row = data[i];
-      if (normEmail_(row[lc['Assigned Inbox']]) !== me || !row[lc['Email']]) continue;
-      var status = row[lc['Status']];
+      if (!row[lc['Email']]) continue;
+      var owner = normEmail_(row[lc['Assigned Inbox']]);
+      var status = String(row[lc['Status']] || '').trim();
       var sent = emailsSent_(row, lc);
-      var next = row[lc['Next Send']];
-      if (status === STATUS.ACTIVE && sent < maxSteps && next instanceof Date && next <= now) due.push(i);
-      else if (status === STATUS.NEW || (status === '' && sent === 0)) fresh.push(i);
+      var isNew = status === STATUS.NEW || (status === '' && sent === 0);
+      if (owner === me) {
+        var next = row[lc['Next Send']];
+        if (status === STATUS.ACTIVE && sent < maxSteps && next instanceof Date && next <= now) due.push(i);
+        else if (isNew) fresh.push(i);
+      } else if (isNew && stuck && stuck(owner)) {
+        spare.push(i);
+      }
     }
     due.sort(function (a, b) { return data[a][lc['Next Send']] - data[b][lc['Next Send']]; });
-    var queue = due.concat(fresh).slice(0, quota);
-    if (!queue.length) return 'Nothing due right now. ' + checked;
+    // Leads that failed before go last, so they can never hold up the rest.
+    var tries = function (i) { return scan.failures[String(data[i][lc['Lead ID']])] || 0; };
+    fresh.sort(function (a, b) { return tries(a) - tries(b); });
+    var queue = due.concat(fresh);
 
-    var started = Date.now();
+    // Nothing (or not enough) of its own: take over New leads from Gmails that are paused or not running.
+    if (queue.length < quota && spare.length) {
+      var take = spare.slice(0, Math.min(quota - queue.length, 10));
+      var from = {};
+      take.forEach(function (i) {
+        var was = normEmail_(data[i][lc['Assigned Inbox']]) || '(no Gmail)';
+        from[was] = (from[was] || 0) + 1;
+        updateLead_(ld, lc, data[i][lc['Lead ID']], i + 1, { 'Assigned Inbox': me });
+      });
+      log_(ss, me, '', 'LEADS_MOVED', '', 'Took over ' + take.length + ' waiting lead(s) from Gmails that are paused or not running: ' +
+        Object.keys(from).map(function (k) { return k + ' (' + from[k] + ')'; }).join(', '), '', '');
+      notes.push('Took over ' + take.length + ' waiting lead(s) from stuck Gmails.');
+      queue = queue.concat(take);
+    }
+    queue = queue.slice(0, quota);
+    if (!queue.length) return done('Nothing due right now.');
+
     var sentCount = 0, errors = 0;
     for (var q = 0; q < queue.length; q++) {
-      if (Date.now() - started > 240000) break; // stay well inside Google's 6 minute limit
+      if (Date.now() - started > RUN_BUDGET_MS) break;
       var idx = queue[q];
-      var lead = data[idx];
-      var leadId = lead[lc['Lead ID']];
+      var leadId = data[idx][lc['Lead ID']];
+      // Read the row again: a reply, an edit or another Gmail may have changed it since.
+      var cur = leadRowNow_(ld, lc, leadId, idx + 1);
+      if (!cur) continue;
+      var lead = cur.values;
+      if (normEmail_(lead[lc['Assigned Inbox']]) !== me) continue;
+      if (String(lead[lc['Status']] || '').trim() !== String(data[idx][lc['Status']] || '').trim()) continue;
       var email = normEmail_(lead[lc['Email']]);
 
       if (isBlocked_(email, dnc)) {
-        updateLead_(ld, lc, leadId, idx + 1, { 'Status': STATUS.SKIPPED, 'Next Send': '' });
+        updateLead_(ld, lc, leadId, cur.row, { 'Status': STATUS.SKIPPED, 'Next Send': '' });
         log_(ss, me, email, 'SKIPPED', leadId, 'On Do Not Contact list', '', '');
         continue;
       }
@@ -1984,11 +2100,11 @@ function runForInbox_() {
       var text = messageFor_(lead, lc, step, st);
       if (!text) {
         if (step === 1) {
-          updateLead_(ld, lc, leadId, idx + 1, { 'Status': STATUS.NEEDS });
+          updateLead_(ld, lc, leadId, cur.row, { 'Status': STATUS.NEEDS });
           log_(ss, me, email, 'SKIPPED', leadId, 'No message to send', '', '');
         } else {
           // no follow-up text for this step: the sequence ends here
-          updateLead_(ld, lc, leadId, idx + 1, { 'Status': STATUS.DONE, 'Next Send': '' });
+          updateLead_(ld, lc, leadId, cur.row, { 'Status': STATUS.DONE, 'Next Send': '' });
           log_(ss, me, email, 'COMPLETED', leadId, 'No text for email ' + step + ', sequence ended', '', '');
         }
         continue;
@@ -2021,32 +2137,111 @@ function runForInbox_() {
           up['Status'] = STATUS.DONE;
           up['Next Send'] = '';
         }
-        updateLead_(ld, lc, leadId, idx + 1, up);
+        updateLead_(ld, lc, leadId, cur.row, up);
         log_(ss, me, email, SENT_EVENTS[step - 1], leadId, subject, res.threadId, res.id);
         sentCount++;
       } catch (e) {
         errors++;
+        var quotaHit = QUOTA_ERROR.test(e.message);
         log_(ss, me, email, 'ERROR', leadId, 'Send failed: ' + e.message, '', '');
-        updateLead_(ld, lc, leadId, idx + 1, { 'Notes': 'Send error: ' + e.message });
-        if (/limit|quota|too many|rate/i.test(e.message) || errors >= 3) break;
+        var fail = { 'Notes': 'Send error: ' + e.message };
+        if (!quotaHit) {
+          var n = (scan.failures[String(leadId)] || 0) + 1;
+          scan.failures[String(leadId)] = n;
+          if (n >= MAX_SEND_TRIES) {
+            fail['Status'] = STATUS.FAILED;
+            fail['Next Send'] = '';
+            fail['Notes'] = 'Could not send after ' + n + ' tries: ' + e.message + '. Fix the email or message, then set Status back to ' +
+              (step === 1 ? 'New' : 'In sequence') + '.';
+          }
+        }
+        updateLead_(ld, lc, leadId, cur.row, fail);
+        if (quotaHit || errors >= 3) break;
       }
 
       if (q < queue.length - 1) {
         var wait = st.minDelay + Math.random() * Math.max(0, st.maxDelay - st.minDelay);
-        if (Date.now() - started + wait * 1000 > 240000) break;
+        if (Date.now() - started + wait * 1000 > RUN_BUDGET_MS) break;
         Utilities.sleep(Math.round(wait * 1000));
       }
     }
-    return 'Sent ' + sentCount + ' email(s)' + (errors ? ', ' + errors + ' error(s) (see Log)' : '') +
-      '. Today: ' + (stats.sentToday + sentCount) + '/' + limit + '. ' + checked;
+    return done('Sent ' + sentCount + ' email(s)' + (errors ? ', ' + errors + ' error(s) (see Log)' : '') +
+      '. Today: ' + (scan.sentToday + sentCount) + '/' + limit + '.');
   } finally {
     userLock.releaseLock();
   }
 }
 
+// One pass over the Log for this Gmail: sends today, the recent bounce rate, past pauses,
+// failed sends per lead, and the Gmail message IDs already handled.
+function logScan_(ss, me, now) {
+  var DAY = 86400000;
+  var out = { sentToday: 0, totalSent: 0, bounces: 0, recentSent: 0, recentBounces: 0,
+              lastPause: null, lastResume: null, pauses14: 0, failures: {}, seen: {} };
+  var lg = ss.getSheetByName(SHEET.LOG);
+  if (lg.getLastRow() < 2) return out;
+  var v = lg.getRange(2, 1, lg.getLastRow() - 1, 8).getValues();
+  var midnight = startOfToday_(ss);
+  var mine = [];
+  v.forEach(function (r) {
+    if (normEmail_(r[1]) !== me) return;
+    var ts = r[0] instanceof Date ? r[0] : null;
+    var ev = String(r[3]);
+    if (r[7]) out.seen[String(r[7])] = true;
+    if (ev === 'INBOX_PAUSED' && ts) {
+      if (!out.lastPause || ts > out.lastPause) out.lastPause = ts;
+      if (now - ts < 14 * DAY) out.pauses14++;
+    } else if (ev === 'INBOX_RESUMED' && ts) {
+      if (!out.lastResume || ts > out.lastResume) out.lastResume = ts;
+    } else if (ev === 'ERROR' && r[4] && /^Send failed/.test(String(r[5])) && !QUOTA_ERROR.test(String(r[5]))) {
+      out.failures[String(r[4])] = (out.failures[String(r[4])] || 0) + 1;
+    } else if (ev.indexOf('SENT') === 0 || ev === 'BOUNCE') {
+      mine.push(r);
+    }
+  });
+  var since = new Date(now.getTime() - 7 * DAY);
+  if (out.lastResume && out.lastResume > since) since = out.lastResume;
+  var lastSend = {};
+  mine.forEach(function (r) {
+    if (String(r[3]) === 'BOUNCE') return;
+    out.totalSent++;
+    if (r[0] instanceof Date) {
+      if (r[0] >= midnight) out.sentToday++;
+      if (r[0] >= since) out.recentSent++;
+      var id = String(r[4]);
+      if (!lastSend[id] || r[0] > lastSend[id]) lastSend[id] = r[0];
+    }
+  });
+  mine.forEach(function (r) {
+    if (String(r[3]) !== 'BOUNCE') return;
+    out.bounces++;
+    var s = lastSend[String(r[4])];
+    if (s && s >= since) out.recentBounces++;   // only bounces of emails sent in the window count
+  });
+  return out;
+}
+
+// Says whether another Gmail's waiting leads may be taken over: it is paused, not on the
+// Inboxes tab, never ran, or has not run for STUCK_HOURS (its trigger stopped).
+function stuckChecker_(ss, me, now) {
+  var ib = ss.getSheetByName(SHEET.INBOXES);
+  var ic = colMap_(ib);
+  if (ic['Last Run'] === undefined || ib.getLastRow() < 2) return null;
+  var working = {};
+  ib.getRange(2, 1, ib.getLastRow() - 1, ib.getLastColumn()).getValues().forEach(function (r) {
+    var email = normEmail_(r[ic['Inbox Email']]);
+    var last = r[ic['Last Run']];
+    if (email) working[email] = isActive_(r[ic['Status']]) && last instanceof Date &&
+      now - last < STUCK_HOURS * 3600000;
+  });
+  return function (owner) { return owner !== me && !working[owner]; };
+}
+
 // ---------------------------------------------------------------- replies & bounces
 
-function checkInbox_(ss, me, st) {
+// seen: Gmail message IDs already handled (read from the Log when not given).
+// deadline: stop looking at more emails after this time; the rest is checked next run.
+function checkInbox_(ss, me, st, seen, deadline) {
   var ld = ss.getSheetByName(SHEET.LEADS);
   var lc = colMap_(ld);
   var data = ld.getDataRange().getValues();
@@ -2061,16 +2256,24 @@ function checkInbox_(ss, me, st) {
   }
   if (!Object.keys(byEmail).length) return 'No contacted leads to check.';
 
-  var seen = processedIds_(ss, me);
-  var threads = GmailApp.search('in:anywhere newer_than:4d -from:me', 0, 300);
-  if (!threads.length) return 'No new replies or bounces.';
-  var all = GmailApp.getMessagesForThreads(threads);
+  seen = seen || processedIds_(ss, me);
+  deadline = deadline || Date.now() + 240000;
+  var found = GmailApp.search('in:anywhere newer_than:4d -from:me', 0, 300);
+  if (!found.length) return 'No new replies or bounces.';
+  // Threads we emailed first: replies and most bounces are in them. Then everything else, while time allows.
+  var threads = found.filter(function (th) { return byThread[th.getId()] !== undefined; })
+    .concat(found.filter(function (th) { return byThread[th.getId()] === undefined; }));
   var label = null;
-  var replies = 0, bounces = 0, autos = 0;
+  var replies = 0, bounces = 0, autos = 0, cut = false;
+  var all = [], CHUNK = 50;
 
   for (var t = 0; t < threads.length; t++) {
+    if (t % CHUNK === 0) {
+      if (t > 0 && Date.now() > deadline) { cut = true; break; }
+      all = GmailApp.getMessagesForThreads(threads.slice(t, t + CHUNK));
+    }
     var tid = threads[t].getId();
-    var msgs = all[t];
+    var msgs = all[t % CHUNK];
     for (var m = 0; m < msgs.length; m++) {
       var msg = msgs[m];
       var mid = msg.getId();
@@ -2143,7 +2346,8 @@ function checkInbox_(ss, me, st) {
     }
   }
   return 'Found ' + replies + ' new repl' + (replies === 1 ? 'y' : 'ies') + ', ' + bounces +
-    ' bounce(s), ' + autos + ' auto-repl' + (autos === 1 ? 'y' : 'ies') + '.';
+    ' bounce(s), ' + autos + ' auto-repl' + (autos === 1 ? 'y' : 'ies') + '.' +
+    (cut ? ' (Checked the most important emails; the rest next run.)' : '');
 }
 
 // ---------------------------------------------------------------- test email
@@ -2577,7 +2781,7 @@ function analyzeTeam_(d, prev, now, todayStart) {
   for (var j = 1; j < ibv.length; j++) {
     if (!isValidEmail_(normEmail_(ibv[j][ih['Inbox Email']]))) continue;
     inboxes++;
-    if (String(ibv[j][ih['Status']]).trim() === 'Active') active++;
+    if (isActive_(ibv[j][ih['Status']])) active++;
     if (String(ibv[j][ih['Health']] || '').indexOf('🔴') >= 0) redHealth++;
   }
 
@@ -2589,13 +2793,14 @@ function analyzeTeam_(d, prev, now, todayStart) {
   if (d.settings) {
     var labels = {};
     d.settings.forEach(function (x) { labels[String(x[0]).trim()] = true; });
-    var gone = SETTINGS_DEF.filter(function (x) { return !labels[x.label] && x.key !== 'theme' && x.key !== 'layout'; }).map(function (x) { return x.label; });
+    var gone = SETTINGS_DEF.filter(function (x) { return !labels[x.label] && !x.added && x.key !== 'theme' && x.key !== 'layout'; }).map(function (x) { return x.label; });
     if (gone.length) add('red', 'settingsRows', 'Settings rows deleted or renamed: ' + gone.join(', '), HOW_REPAIR);
     if (st.dailyLimit > 35) add('yellow', 'limit', 'Daily limit raised to ' + st.dailyLimit + ' (max 35 for free Gmail)', 'Their Settings tab.');
     if (!st.rampStart) add('yellow', 'warmup', 'Warm-up turned off', 'Their Settings tab.');
     if (st.paused) add('yellow', 'paused', 'Sending is paused (Pause everything = TRUE)', 'Their Settings tab.');
     if (!st.optOut) add('yellow', 'optout', 'Opt-out line removed', 'Their Settings tab.');
     if (st.followUps === 0) add('yellow', 'nofu', 'Follow-ups turned off', 'Their Settings tab.');
+    if (st.pace === 'Fast') add('yellow', 'fast', 'Sending pace set to Fast (Steady is safer for free Gmails)', 'Their Settings tab.');
   }
 
   // Changes since the last check
@@ -2692,20 +2897,36 @@ function withLock_(fn) {
   try { return fn(); } finally { lock.releaseLock(); }
 }
 
+// The lead's row number now (rows may have been sorted or moved since they were read), or -1.
+function findLeadRow_(ld, lc, leadId, rowHint) {
+  if (rowHint >= 2 && rowHint <= ld.getLastRow() &&
+      String(ld.getRange(rowHint, lc['Lead ID'] + 1).getValue()) === String(leadId)) return rowHint;
+  var ids = ld.getRange(2, lc['Lead ID'] + 1, Math.max(1, ld.getLastRow() - 1), 1).getValues();
+  for (var i = 0; i < ids.length; i++) if (String(ids[i][0]) === String(leadId)) return i + 2;
+  return -1;
+}
+
+// The lead's row as it is in the sheet right now: { row, values }, or null if it is gone.
+function leadRowNow_(ld, lc, leadId, rowHint) {
+  var row = findLeadRow_(ld, lc, leadId, rowHint);
+  return row < 0 ? null : { row: row, values: ld.getRange(row, 1, 1, ld.getLastColumn()).getValues()[0] };
+}
+
 function updateLead_(ld, lc, leadId, rowHint, updates) {
   withLock_(function () {
-    var row = rowHint;
-    if (String(ld.getRange(row, lc['Lead ID'] + 1).getValue()) !== String(leadId)) {
-      // rows were sorted or moved since we read them: find the lead again
-      row = -1;
-      var ids = ld.getRange(2, lc['Lead ID'] + 1, Math.max(1, ld.getLastRow() - 1), 1).getValues();
-      for (var i = 0; i < ids.length; i++) if (String(ids[i][0]) === String(leadId)) { row = i + 2; break; }
-      if (row < 0) return;
+    var row = findLeadRow_(ld, lc, leadId, rowHint);
+    if (row < 0) return;
+    // Side-by-side columns are written in one go (much faster than one cell at a time).
+    var cols = Object.keys(updates).filter(function (h) { return lc[h] !== undefined; })
+      .map(function (h) { return { c: lc[h], v: updates[h] }; })
+      .sort(function (a, b) { return a.c - b.c; });
+    for (var i = 0; i < cols.length;) {
+      var j = i;
+      while (j + 1 < cols.length && cols[j + 1].c === cols[j].c + 1) j++;
+      ld.getRange(row, cols[i].c + 1, 1, j - i + 1)
+        .setValues([cols.slice(i, j + 1).map(function (x) { return x.v; })]);
+      i = j + 1;
     }
-    Object.keys(updates).forEach(function (h) {
-      if (lc[h] === undefined) return;
-      ld.getRange(row, lc[h] + 1).setValue(updates[h]);
-    });
   });
 }
 
@@ -2746,6 +2967,9 @@ function settingsFromValues_(values) {
   s.maxDelay = Math.max(s.minDelay, num(s.maxDelay, 60));
   s.bouncePause = num(s.bouncePause, 0.05);
   if (s.bouncePause > 1) s.bouncePause = s.bouncePause / 100;
+  s.autoResume = s.autoResume === '' ? 0 : num(s.autoResume, 0);
+  s.pace = /fast/i.test(String(s.pace)) ? 'Fast' : 'Steady';
+  s.autoMove = toBool_(s.autoMove);
   s.weekends = toBool_(s.weekends);
   s.paused = toBool_(s.paused);
   s.optOut = String(s.optOut || '').trim();
@@ -2775,6 +2999,14 @@ function inboxRows_(ss) {
   return out;
 }
 
+function isActive_(status) {
+  return String(status || '').trim().toLowerCase() === 'active';
+}
+
+function isBouncePaused_(status) {
+  return String(status || '').trim().toLowerCase() === 'paused - bounces';
+}
+
 function findInbox_(ss, email) {
   return inboxRows_(ss).filter(function (x) { return x.email === email; })[0] || null;
 }
@@ -2784,7 +3016,7 @@ function allInboxes_(ss) {
 }
 
 function activeInboxes_(ss) {
-  return inboxRows_(ss).filter(function (x) { return x.status === 'Active'; })
+  return inboxRows_(ss).filter(function (x) { return isActive_(x.status); })
     .map(function (x) { return x.email; });
 }
 
@@ -2793,23 +3025,6 @@ function setInboxCell_(ss, row, header, value) {
   var col = colMap_(ib)[header];
   if (col === undefined) return;
   withLock_(function () { ib.getRange(row, col + 1).setValue(value); });
-}
-
-function inboxStats_(ss, me) {
-  var lg = ss.getSheetByName(SHEET.LOG);
-  var out = { sentToday: 0, totalSent: 0, bounces: 0 };
-  if (lg.getLastRow() < 2) return out;
-  var v = lg.getRange(2, 1, lg.getLastRow() - 1, 4).getValues();
-  var midnight = startOfToday_(ss);
-  v.forEach(function (r) {
-    if (normEmail_(r[1]) !== me) return;
-    var ev = String(r[3]);
-    if (ev.indexOf('SENT') === 0) {
-      out.totalSent++;
-      if (r[0] instanceof Date && r[0] >= midnight) out.sentToday++;
-    } else if (ev === 'BOUNCE') out.bounces++;
-  });
-  return out;
 }
 
 function processedIds_(ss, me) {
@@ -3061,8 +3276,9 @@ function dailyLimitFor_(limit, st, dayIdx) {
   return Math.min(limit, st.rampStart + Math.max(0, dayIdx) * st.rampStep);
 }
 
-function runQuota_(remaining, hour, endHour) {
-  var runsLeft = Math.max(1, endHour - hour);
+// Steady pace: share what is left today evenly over the runs left in the send window.
+function runQuota_(remaining, nowMinute, endMinute, everyMinutes) {
+  var runsLeft = Math.max(1, Math.ceil((endMinute - nowMinute) / everyMinutes));
   return Math.max(0, Math.ceil(remaining / runsLeft));
 }
 

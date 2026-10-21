@@ -35,6 +35,9 @@ everything: who got which email, from which Gmail, follow-ups, replies and bounc
 
 If an update can't be downloaded or has a mistake in it, every sheet keeps running the version it already has.
 
+After an update that adds new Settings, click **📧 Outreach → 1. Set up / repair this sheet** once in each master
+sheet to show the new rows. Until then the new settings use their defaults.
+
 
 ## Part 1: Make the master sheet (once, 15 minutes)
 
@@ -76,15 +79,16 @@ Do this signed in to the Gmail that will **own** the sheet.
 7. Repeat for each Gmail.
 8. In the master sheet, click **📧 Outreach → Spread waiting leads across inboxes**.
 
-Each connected Gmail now sends **by itself every hour** during the send window,
-even when your computer is off.
+Each connected Gmail now sends **by itself every 15 minutes** during the send window,
+even when your computer is off. (Gmails connected with an older version switch from hourly to every
+15 minutes by themselves on their next run.)
 
 **Updates arrive by themselves** within an hour. Nobody pastes code again.
 
 **Already using the old way (Code.gs pasted in)?** Switch once: in the master sheet's script and in
 each Gmail's copy, replace everything with `Loader.gs`. Copy your `MASTER_SHEET` and `SENDER_NAME`
 lines across in the Gmail copies. Save, choose **updateNow** in the dropdown, click **▶ Run** and **Allow**.
-Hourly sending keeps working; nothing else changes.
+Sending keeps working; nothing else changes.
 
 ## Part 3: Get leads and upload them
 
@@ -144,6 +148,8 @@ and repairs the tabs. Leads, sends, replies, Gmails and Do Not Contact are never
 
 **Lead status:** New → In sequence → Completed. Or **Replied**, Bounced, Unsubscribed.
 **Needs message** = no message text; fill in the Message cell and set Status to New.
+**Send failed** = Gmail refused this email twice (read the **Notes** cell). Fix the email or message, then set
+Status back to New (or In sequence for a follow-up). Other leads keep sending in the meantime.
 
 ## Settings
 
@@ -155,6 +161,10 @@ and repairs the tabs. Leads, sends, replies, Gmails and Do Not Contact are never
 | Warm-up: day 1 limit / increase | 20 / 5 | New Gmails start at 20 a day, +5 a day |
 | Days before follow-up 1 / 2 | 3 / 4 | Follow-ups go in the same email thread |
 | Send window | 8 to 18 | Sending hours, in the sheet's time zone |
+| Sending pace | Steady | **Steady** spreads each Gmail's emails across the send window (safest). **Fast** sends each Gmail's daily limit as soon as it can, usually within 1 to 2 hours |
+| Auto-pause inbox at bounce rate | 5% | A Gmail stops if this share of its **last 7 days'** emails bounce (at least 20 sends). Sends from before it was turned back on don't count |
+| Restart a Gmail paused for bounces after (days) | 2 | It restarts by itself and warms up again from day 1. Blank = never |
+| Move waiting leads off stuck Gmails | TRUE | A working Gmail takes over **New** leads from a Gmail that is paused, removed, or hasn't run for 3 hours |
 | Send on weekends | TRUE | |
 | Signature | `{{sender_name}}` | Each Gmail signs with its own name |
 | Opt-out line | (a P.S. line) | Added to every email |
@@ -162,7 +172,7 @@ and repairs the tabs. Leads, sends, replies, Gmails and Do Not Contact are never
 
 ## Replies
 
-Each Gmail checks for replies every hour. A reply turns the lead **Replied**, stops
+Each Gmail checks for replies about every 25 minutes. A reply turns the lead **Replied**, stops
 its follow-ups, and gets the Gmail label **Outreach Replies**.
 "Stop" or "remove me" replies go to Do Not Contact automatically.
 
@@ -181,6 +191,27 @@ Then set the **Outcome** (Interested, Meeting booked, Not interested).
 - Never more than 35 a day per Gmail. Keep the warm-up on.
 - Check every list with an email checker before uploading.
 - A Gmail gets a warning or a phone check? Set it to **Paused** on Inboxes for a few days.
+  Its waiting leads move to your other Gmails by themselves.
+
+## Speed, stops and bounce pauses
+
+**Why it doesn't send everything at once.** Each Gmail sends at most its daily limit (35), spread
+over the send window. That's what keeps free Gmails out of spam. To send **more per day, add more Gmails**:
+10 Gmails × 35 = 350 a day. To send the same amount **sooner** in the day, set **Sending pace** to **Fast**.
+
+**It fixes itself when sending stops.** You no longer need "Spread waiting leads" to get things moving:
+- A lead Gmail keeps refusing becomes **Send failed** instead of blocking every lead behind it.
+- Leads waiting on a Gmail that is paused or has stopped running are taken over by a working Gmail
+  (Log event `LEADS_MOVED`).
+- A slow reply check can't use up the run any more: sending always gets its turn.
+- If Google cuts a run off, **Last Result** says so instead of showing an old message.
+
+**Bounce pauses.** When a Gmail is paused for bounces (Status **Paused - bounces**, Health 🔴):
+- It restarts **by itself** after 2 days (Settings), warming up again from 20 a day.
+- Or set Status back to **Active** yourself. It's judged on its **new** emails only, so it won't be paused
+  again straight away for the old bounces.
+- Paused 3 times in 14 days? It stays paused until you set it to Active. Check your lead lists with an
+  email checker first: bounces almost always come from unchecked lists.
 - Use each Gmail like a person too: open it, reply to a few normal emails.
 
 ## New campaign with other Gmails
@@ -249,6 +280,9 @@ It shows who edited what and when, and you can restore an earlier version.
 | No 📧 Outreach menu | Reload the sheet and wait 10 seconds |
 | "Gmail API service is not added" | Apps Script → Services **+** → Gmail API → Add |
 | A Gmail isn't sending | Read its **Last Result** on Inboxes. Check Pause everything, the send window and time zone, and that it has New leads |
+| Last Result says "Started, did not finish" | Google stopped that run. It tries again in 15 minutes. If it keeps happening, click **Run now for THIS Gmail** from that Gmail and read the message |
+| Leads show **Send failed** | Read the lead's **Notes**. Usually a mistyped email. Fix it, then set Status back to New |
+| Last Run on Inboxes is hours old | That Gmail's automatic run stopped. Its waiting leads move to other Gmails by themselves. To fix it: in that Gmail's script, choose **connectInbox** → **Run** (or **📧 Outreach → Connect THIS Gmail** for the owner) |
 | "This app is blocked" | That Gmail is using someone else's script. Give it its own copy (Part 2) |
 | Wrong Gmail connected | Use an Incognito window with only that Gmail signed in |
 | "Missing columns" on upload | Make the file again with `LEAD-PROMPT.txt` |
