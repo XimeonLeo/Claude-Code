@@ -33,9 +33,10 @@ if (typeof OUTREACH_CONFIG === 'object' && OUTREACH_CONFIG) {
   if (OUTREACH_CONFIG.SENDER_NAME) SENDER_NAME = OUTREACH_CONFIG.SENDER_NAME;
 }
 
-// Change this every time you publish a new version, so you can see who has it
-// (Outreach -> Which Gmail am I using?).
-var CORE_VERSION = '2026-10-21';
+// Change both every time you publish a new version, and add what changed to CHANGELOG (further down).
+// People see the version in Outreach -> Which Gmail am I using?, and the changes in Outreach -> What's new.
+var CORE_BUILD = 34;
+var CORE_VERSION = 'v34';
 
 // ---------------------------------------------------------------- admins
 // Only these Gmails can use "Outreach -> Admin: watch team sheets".
@@ -130,7 +131,18 @@ var SETTINGS_DEF = [
 // ---------------------------------------------------------------- menu
 
 function onOpen() {
+  // After an update: a notice in the corner and a highlighted first menu item, until the person opens
+  // What's new. (Google does not let a window open by itself when the sheet opens.)
+  var fresh = seenBuild_() < CORE_BUILD;
+  if (fresh) {
+    try {
+      SpreadsheetApp.getActiveSpreadsheet().toast('Outreach was updated to ' + CORE_VERSION +
+        '. Click 📧 Outreach → 🆕 What\'s new to see what changed and where to find it.', '🆕 Outreach updated', 30);
+    } catch (e) { /* the menu item still shows it */ }
+  }
   SpreadsheetApp.getUi().createMenu('📧 Outreach')
+    .addItem(fresh ? '🆕 What\'s new in ' + CORE_VERSION + ' (click to see)' : 'What\'s new / changelog', 'slot9')
+    .addSeparator()
     .addItem('1. Set up / repair this sheet', 'setupSheet')
     .addItem('Reset to default settings (keeps your leads)', 'slot3')
     .addSeparator()
@@ -907,10 +919,12 @@ function buildDashboard_(ss) {
   var VAR = 'INDEX(Leads!$A:$BZ,0,MATCH("Variant",Leads!$1:$1,0))';
   var ANGLES = 'FILTER(' + VAR + ',' + VAR + '<>"",' + VAR + '<>"Variant")';
   var angleRows = lastStatusRow - P - 1;
-  // The most-used angles, cut to the rows the panel has. Without the cut, more angles than rows
-  // would spill into the note below and the whole panel would show #REF!.
-  d.getRange(P + 2, 10).setFormula('=IFERROR(ARRAY_CONSTRAIN(QUERY(' + ANGLES + ',"select Col1, count(Col1) group by Col1 ' +
-    'order by count(Col1) desc label count(Col1) \'\'",0),' + angleRows + ',1),"")');
+  // The most-used angles, one per row, as many as the panel has rows.
+  var TOP = 'QUERY(' + ANGLES + ',"select Col1, count(Col1) group by Col1 order by count(Col1) desc label count(Col1) \'\'",0)';
+  for (var k = 1; k <= angleRows; k++) {
+    // One cell per angle (no list spilling down), so nothing below can ever cause #REF!.
+    d.getRange(P + 1 + k, 10).setFormula('=IFERROR(INDEX(' + TOP + ',' + k + ',1),"")');
+  }
   for (var ar = P + 2; ar <= lastStatusRow; ar++) {
     var A = '$J' + ar;
     d.getRange(ar, 10, 1, 7).setBackground((ar - P) % 2 ? T.ivory : '#FFFFFF');
@@ -2449,6 +2463,199 @@ function encodeHeader_(s) {
 
 // ---------------------------------------------------------------- sheet helpers
 
+
+// ---------------------------------------------------------------- changelog
+
+// Every version, newest first. Shown in Outreach -> What's new after each update.
+// When you publish an update: add an entry at the top, and set CORE_BUILD and CORE_VERSION to match.
+// Each item: [kind, what changed, where to find it]. kind: New, Improved, Fixed, Changed or Removed.
+// repair: true = people should click "Apply the update to this sheet" (runs Set up / repair).
+var CHANGELOG = [
+  { v: 34, date: '2026-10-21', title: 'Changelog, and the Results by Angle fix', repair: true, items: [
+    ['New', 'This "What\'s new" window. It opens from the menu after every update, shows what changed and where to find it, and keeps the full history.', 'Outreach -> What\'s new'],
+    ['New', 'Version numbers now count up (v34, v35...) instead of dates.', 'Outreach -> Which Gmail am I using?'],
+    ['Fixed', 'Results by Angle showed #REF! ("Array result was not expanded") when the Leads tab had more angles than the panel has rows. It now lists the most-used angles that fit and says how many there are in total.', 'Dashboard (Classic layout) -> Results by Angle. Click "Apply the update to this sheet" below']
+  ] },
+  { v: 33, date: '2026-10-21', title: 'Results by Angle: first fix', repair: true, items: [
+    ['Fixed', 'First attempt at the Results by Angle #REF! error. Replaced by v34.', 'Dashboard -> Results by Angle']
+  ] },
+  { v: 32, date: '2026-10-21', title: 'Replies window, 24-hour report, admin on the Leaderboard', repair: true, items: [
+    ['New', 'Replies window: every reply that needs an outcome, and everyone to follow up (Interested / Follow up later). One click sets the outcome, with an optional note. No more searching the Leads tab.', 'Outreach -> Replies: set outcomes & follow-ups'],
+    ['New', '"My last 24 hours" report for team meetings: sent, daily standard met or not (and why), replies, bounces, leads waiting, goal progress and totals. Copy as text for WhatsApp.', 'Outreach -> My last 24 hours (report)'],
+    ['New', 'Setting "Daily standard (emails sent per day)" for the report. Blank = what your active Gmails can send today.', 'Settings tab'],
+    ['New', 'Dashboard top band shows replies needing an outcome, people to follow up, interested and meetings.', 'Dashboard, under the title'],
+    ['New', 'Admin: add or remove your own numbers on the Leaderboard. Leaderboard also shows Need outcome and To follow up.', 'Outreach -> Admin: watch team sheets -> Leaderboard: my own numbers']
+  ] },
+  { v: 31, date: '2026-10-21', title: 'Faster sending, self-repair, bounce-pause fix', repair: true, items: [
+    ['Improved', 'Each Gmail runs every 15 minutes instead of every hour. Connected Gmails switch by themselves.', 'Automatic'],
+    ['New', 'Setting "Sending pace": Steady (spread over the day) or Fast (daily limit in about 1-2 hours).', 'Settings -> Sending pace'],
+    ['Fixed', 'One lead Gmail refused could block a Gmail for good. It now becomes "Send failed" (reason in Notes) and the rest keep sending.', 'Leads tab -> Status "Send failed"'],
+    ['Fixed', 'A slow reply check could use up the whole run so nothing was sent. It now has a time limit.', 'Automatic'],
+    ['New', 'Working Gmails take over New leads from Gmails that are paused or have stopped running (Log: LEADS_MOVED). No more re-spreading by hand.', 'Settings -> Move waiting leads off stuck Gmails'],
+    ['Fixed', 'A Gmail set back to Active after a bounce pause was paused again straight away. Only its last 7 days, since it was turned back on, now count.', 'Inboxes tab -> Status'],
+    ['New', 'Gmails paused for bounces restart by themselves after 2 days, warming up again.', 'Settings -> Restart a Gmail paused for bounces after (days)'],
+    ['Improved', 'Last Result says when Google cut a run off.', 'Inboxes tab -> Last Result']
+  ] },
+  { v: 30, date: '2026-10-20', title: 'Five more Dashboard layouts', repair: false, items: [
+    ['New', 'Layouts Executive, Scoreboard, Funnel, Inbox Command and Compact, with a preview of each.', 'Outreach -> Choose dashboard layout']
+  ] },
+  { v: 29, date: '2026-10-20', title: 'Notion and ClickUp themes', repair: false, items: [
+    ['New', 'Colour themes "Notion Style" and "ClickUp Style".', 'Settings -> Colour theme, then Outreach -> Apply colour theme'],
+    ['Changed', 'Warm-up increase and bounce-pause rate accept any value.', 'Settings tab']
+  ] },
+  { v: 28, date: '2026-10-20', title: 'Multi-file upload, reset, Leaderboard, mistake guards', repair: true, items: [
+    ['Improved', 'Upload several CSV files at once.', 'Outreach -> Upload a lead file (CSV)'],
+    ['New', 'Reset to default settings, keeping your leads.', 'Outreach -> Reset to default settings'],
+    ['New', 'Admin Leaderboard ranking every team member.', 'Leaderboard tab (admin)'],
+    ['New', 'Google asks "Edit anyway?" before you change parts the script fills in. Settings refuse values that make no sense.', 'Dashboard, Log, Leads, Inboxes, Settings']
+  ] },
+  { v: 27, date: '2026-10-20', title: 'Emails Sent read correctly', repair: true, items: [
+    ['Fixed', 'When the Emails Sent column was formatted as a date, leads were marked Completed without sending.', 'Leads tab -> Emails Sent']
+  ] },
+  { v: 26, date: '2026-10-20', title: 'New leads always start at email 1', repair: false, items: [
+    ['Fixed', 'A lead pasted over an old row kept the old count and was never emailed. New leads now always start at email 1.', 'Leads tab']
+  ] },
+  { v: 25, date: '2026-10-20', title: 'Ask again for missing permissions', repair: false, items: [
+    ['Fixed', 'If a permission was unticked on Google\'s Allow screen, the script now asks again instead of failing.', 'Any menu item']
+  ] },
+  { v: 24, date: '2026-10-20', title: 'Goal tracker and colour themes', repair: true, items: [
+    ['New', 'Goal tracker band: delivered vs goal, where you should be by today, on track or behind.', 'Dashboard'],
+    ['New', 'Colour themes Navy, Emerald and Burgundy & Gold.', 'Settings -> Colour theme, then Outreach -> Apply colour theme']
+  ] },
+  { v: 23, date: '2026-10-20', title: 'Navy and gold look', repair: true, items: [
+    ['New', 'Paramount Orbit Scouting Centre design: logo, 16 cards (today, all time, results, pipeline), day by day with replies and bounces.', 'Dashboard'],
+    ['New', 'About window.', 'Outreach -> About']
+  ] },
+  { v: 22, date: '2026-10-20', title: 'Loader v3: spare slots', repair: false, items: [
+    ['Improved', 'New menu items can arrive through updates without anyone pasting a new Loader.', 'Automatic']
+  ] },
+  { v: 21, date: '2026-10-20', title: 'Upload window permission fix', repair: false, items: [
+    ['Fixed', '"Not sufficient permissions to call Ui.showModalDialog" when opening the upload window.', 'Outreach -> Upload a lead file (CSV)']
+  ] },
+  { v: 20, date: '2026-10-20', title: 'Lead prompt: help me decide', repair: false, items: [
+    ['New', 'Not sure what to offer or who to target? The AI researches and gives options to pick from.', 'LEAD-PROMPT.txt, question 3']
+  ] },
+  { v: 19, date: '2026-10-20', title: 'Code link set', repair: false, items: [
+    ['Changed', 'The Loader points at the admin\'s Drive copy of Code.gs.', 'Loader.gs -> CODE_URL']
+  ] },
+  { v: 18, date: '2026-10-20', title: 'Automatic updates', repair: false, items: [
+    ['New', 'Everyone pastes Loader.gs once. It downloads the latest code from the admin\'s Drive every hour.', 'Outreach -> Check for updates now']
+  ] },
+  { v: 17, date: '2026-10-20', title: 'Better, more personal emails', repair: false, items: [
+    ['Improved', 'The lead prompt researches real details per lead, writes shorter natural emails, or follows your own email. Shows one lead first for your OK.', 'LEAD-PROMPT.txt']
+  ] },
+  { v: 16, date: '2026-10-19', title: 'Safe Set up / repair', repair: false, items: [
+    ['Fixed', 'Repair on a sheet with a changed header row added empty columns, so data looked missing. It now checks first and explains how to restore.', 'Outreach -> 1. Set up / repair this sheet']
+  ] },
+  { v: 15, date: '2026-10-19', title: 'Admin Gmail set', repair: false, items: [
+    ['Changed', 'Admin set to the owner\'s Gmail.', 'Code.gs -> ADMINS']
+  ] },
+  { v: 14, date: '2026-10-19', title: 'Admin menu locked', repair: false, items: [
+    ['New', 'Only Gmails listed as admins can use the Admin menu. Team Alerts and Team History are protected.', 'Outreach -> Admin: watch team sheets']
+  ] },
+  { v: 13, date: '2026-10-19', title: 'Admin view', repair: false, items: [
+    ['New', 'Watch team members\' sheets: Team, Team Alerts and Team History tabs, checks every 2 hours, flags deleted rows and changed settings.', 'Outreach -> Admin: watch team sheets']
+  ] },
+  { v: 12, date: '2026-10-19', title: 'Leads you already have', repair: false, items: [
+    ['New', 'The lead prompt can write emails for your own list (Apollo, Apify, a spreadsheet).', 'LEAD-PROMPT.txt, answer 1 to the first question']
+  ] },
+  { v: 11, date: '2026-10-19', title: 'Three files only', repair: false, items: [
+    ['Removed', 'Extra files, the Import tab and import-from-link. One way to import.', 'Outreach -> Upload a lead file (CSV)']
+  ] },
+  { v: 10, date: '2026-10-19', title: 'Simpler lead prompt', repair: false, items: [
+    ['Improved', 'The lead prompt asks a few plain questions (type SKIP if unsure).', 'LEAD-PROMPT.txt']
+  ] },
+  { v: 9, date: '2026-10-19', title: 'Master lead prompt and foolproof upload', repair: false, items: [
+    ['New', 'One lead prompt for the whole team, and an upload window that checks columns and empty cells.', 'Outreach -> Upload a lead file (CSV)']
+  ] },
+  { v: 8, date: '2026-10-18', title: 'Last Result on Inboxes', repair: true, items: [
+    ['New', 'Each Gmail shows why it did or did not send on its last run.', 'Inboxes tab -> Last Result']
+  ] },
+  { v: 7, date: '2026-10-18', title: 'Email angles', repair: true, items: [
+    ['New', 'Leads carry an angle (direct pitch, idea offer...) and the Dashboard compares results by angle.', 'Dashboard -> Results by Angle']
+  ] },
+  { v: 6, date: '2026-10-18', title: 'Lead research prompts', repair: false, items: [
+    ['New', 'Prompts that find leads and write their emails as a CSV for the sheet.', 'LEAD-PROMPT.txt']
+  ] },
+  { v: 5, date: '2026-10-18', title: 'Choose the sending Gmail on import', repair: false, items: [
+    ['New', 'Pick which Gmail sends a file, or spread evenly. Spread waiting leads can keep your choices.', 'Upload window, and Outreach -> Spread waiting leads across inboxes']
+  ] },
+  { v: 4, date: '2026-10-18', title: 'Each Gmail runs its own copy', repair: false, items: [
+    ['Changed', 'Sending Gmails other than the owner use their own script copy (Google blocks shared scripts).', 'SETUP.md, Part 2']
+  ] },
+  { v: 3, date: '2026-10-18', title: 'Upgrade adds new columns', repair: true, items: [
+    ['Improved', 'Set up / repair adds new columns to an existing sheet.', 'Outreach -> 1. Set up / repair this sheet']
+  ] },
+  { v: 2, date: '2026-10-18', title: 'Personal messages per lead', repair: true, items: [
+    ['New', 'Each lead has its own subject, message and follow-ups. Signature per Gmail. "Needs message" status.', 'Leads tab']
+  ] },
+  { v: 1, date: '2026-10-18', title: 'First version', repair: true, items: [
+    ['New', 'The outreach tracker: sends from many Gmails with follow-ups, and tracks replies, bounces and opt-outs.', 'SETUP.md']
+  ] }
+];
+
+// Outreach -> What's new. Uses the loader's spare slot 9. The window calls slot9('repair') to apply
+// the update to this sheet. Opening it marks the current version as seen (per person).
+function slot9(action) {
+  if (action === 'repair') return applyUpdate_();
+  askAllPermissions_();
+  var ss = ss_();
+  loadTheme_(ss);
+  var seen = seenBuild_();
+  try { PropertiesService.getUserProperties().setProperty('SEEN_BUILD', String(CORE_BUILD)); } catch (e) { /* not essential */ }
+  var html = HtmlService.createHtmlOutput(changelogHtml_(THEME, seen)).setWidth(820).setHeight(680);
+  SpreadsheetApp.getUi().showModalDialog(html, 'What\'s new in Outreach ' + CORE_VERSION);
+}
+
+// The last version this person has seen in the What's new window (0 = never opened it).
+function seenBuild_() {
+  try { return Number(PropertiesService.getUserProperties().getProperty('SEEN_BUILD') || 0); } catch (e) { return CORE_BUILD; }
+}
+
+// "Apply the update to this sheet": the same as Set up / repair, without pop-ups.
+function applyUpdate_() {
+  var ss = ss_();
+  var problem = headerProblems_(ss);
+  if (problem) return problem;
+  setupSheet();
+  return 'Done. This sheet now has everything from ' + CORE_VERSION + '.';
+}
+
+function changelogHtml_(T, seen) {
+  var fresh = CHANGELOG.filter(function (c) { return c.v > seen && c.v <= CORE_BUILD; });
+  if (!fresh.length) fresh = CHANGELOG.slice(0, 1);
+  var needRepair = fresh.some(function (c) { return c.repair; });
+  var colour = { New: T.good, Improved: T.navy2, Fixed: '#B26A00', Changed: T.muted, Removed: T.bad };
+  var esc = function (s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+  var block = function (c) {
+    return '<div class="ver"><div class="vh"><b>v' + c.v + '</b> · ' + esc(c.title) + '<span>' + esc(c.date) + '</span></div>' +
+      c.items.map(function (it) {
+        return '<div class="it"><em style="background:' + (colour[it[0]] || T.muted) + '">' + esc(it[0]) + '</em><div>' + esc(it[1]) +
+          (it[2] ? '<small>Where: ' + esc(it[2]).replace(/ -&gt; /g, ' → ') + '</small>' : '') + '</div></div>';
+      }).join('') + '</div>';
+  };
+  return '<style>body{font-family:Arial,sans-serif;margin:0;padding:0 10px;color:#1D2333}' +
+    '.band{background:' + T.navy + ';color:' + T.onNavy + ';border-bottom:3px solid ' + T.gold + ';padding:12px 16px;border-radius:6px;margin-bottom:12px}' +
+    '.band b{font-size:17px}.band div{color:' + T.gold2 + ';font-size:12px;margin-top:3px}' +
+    '.ver{border:1px solid ' + T.line + ';border-radius:6px;margin-bottom:10px;background:#fff}' +
+    '.vh{background:' + T.ivory + ';padding:8px 12px;border-bottom:1px solid ' + T.line + ';font-size:14px}.vh span{float:right;color:#888;font-size:12px}' +
+    '.it{display:flex;gap:10px;padding:8px 12px;font-size:13px;line-height:1.4;border-top:1px solid #F2F2F2}.it:first-of-type{border-top:0}' +
+    '.it em{font-style:normal;color:#fff;font-size:10px;font-weight:bold;border-radius:3px;padding:2px 6px;height:14px;min-width:54px;text-align:center;flex:none}' +
+    '.it small{display:block;color:' + T.muted + ';margin-top:3px}' +
+    '.fix{background:#FFF8E5;border-left:4px solid ' + T.gold + ';padding:10px 12px;border-radius:4px;margin-bottom:12px;font-size:13px}' +
+    '.btn{background:' + T.navy + ';color:' + T.onNavy + ';border:2px solid ' + T.gold + ';border-radius:4px;padding:8px 16px;font-weight:bold;cursor:pointer;margin-top:8px}' +
+    'details{margin:14px 0 20px}summary{cursor:pointer;font-weight:bold;color:' + T.strong + ';padding:6px 0}#msg{margin-left:10px;font-size:12px}</style>' +
+    '<div class="band"><b>You\'re on Outreach ' + esc(CORE_VERSION) + '</b><div>' +
+    (seen && seen < CORE_BUILD ? 'Changes since you last looked (v' + seen + ')' : 'Latest changes') + '</div></div>' +
+    (needRepair ? '<div class="fix"><b>One step for this sheet:</b> some of these changes need the sheet itself updated ' +
+      '(new Settings rows, Dashboard). It keeps all your leads and results.<br>' +
+      '<button class="btn" id="go" onclick="go()">Apply the update to this sheet</button><span id="msg"></span></div>' : '') +
+    fresh.map(block).join('') +
+    '<details><summary>Full history: every version since the start (' + CHANGELOG.length + ')</summary>' +
+    CHANGELOG.filter(function (c) { return fresh.indexOf(c) < 0; }).map(block).join('') + '</details>' +
+    '<script>function go(){var b=document.getElementById("go"),m=document.getElementById("msg");b.disabled=true;m.textContent="Updating the sheet... about 30 seconds.";' +
+    'google.script.run.withSuccessHandler(function(r){m.textContent=r;}).withFailureHandler(function(e){b.disabled=false;m.textContent="Could not update: "+(e&&e.message?e.message:e);}).slot9("repair");}</script>';
+}
 
 // ---------------------------------------------------------------- replies: outcomes and follow-ups
 

@@ -11,6 +11,7 @@ everything: who got which email, from which Gmail, follow-ups, replies and bounc
 | `Code.gs` | Admin only | The real code. It lives in the admin's Google Drive. Update it there and everyone gets the update |
 | `LEAD-PROMPT.txt` | Everyone | The prompt for getting leads |
 | `SETUP.md` | Everyone | This guide |
+| `CHANGELOG.md` | Everyone | Every version and what changed (also in the sheet: **📧 Outreach → What's new**) |
 
 ---
 
@@ -26,6 +27,8 @@ everything: who got which email, from which Gmail, follow-ups, replies and bounc
 5. Save `Loader.gs` and give **that** file to your team. They never need `Code.gs`.
 
 **To send out an update later** (for example when you get a new `Code.gs`):
+0. If you changed `Code.gs` yourself: raise `CORE_BUILD` and `CORE_VERSION` near the top by one (e.g. 34 → 35, `'v35'`),
+   and add what changed at the top of `CHANGELOG` (search for `var CHANGELOG`). That's what people see in What's new.
 1. Test it first: paste the new `Code.gs` into a test sheet's script and check it works.
 2. In Google Drive, right-click your `Code.gs` → **File information** → **Manage versions** →
    **Upload new version** → choose the new file. (This keeps the same link.)
@@ -35,8 +38,13 @@ everything: who got which email, from which Gmail, follow-ups, replies and bounc
 
 If an update can't be downloaded or has a mistake in it, every sheet keeps running the version it already has.
 
-After an update that adds new Settings, click **📧 Outreach → 1. Set up / repair this sheet** once in each master
-sheet to show the new rows. Until then the new settings use their defaults.
+**What people see after an update:** a notice in the corner of the sheet ("Outreach updated") and a highlighted
+first menu item, **📧 Outreach → 🆕 What's new in v35**. It shows what's new, improved, fixed or removed, and
+**where** to find each thing, plus the full history. If the update changes the sheet itself (new Settings rows, the
+Dashboard), it has an **Apply the update to this sheet** button. It's the same as Set up / repair and keeps all leads.
+
+**Want it right away?** Click **📧 Outreach → Check for updates now** first, then reload the sheet. Otherwise a sheet
+can keep using the old version for up to an hour, and a repair in that hour still builds the old Dashboard.
 
 
 ## Part 1: Make the master sheet (once, 15 minutes)
@@ -323,5 +331,6 @@ It shows who edited what and when, and you can restore an earlier version.
 | "Could not update" or the menu only shows "Finish setup" | Check `CODE_URL` in the loader, and that the Drive file is shared as **Anyone with the link → Viewer** |
 | Leads or data look missing after Set up / repair | Nothing is deleted: row 1 (the column names) had been changed, so the old script added new empty columns. **File → Version history → See version history** → pick a version from before the repair → **Restore this version**. Then run Set up / repair again (it now checks before changing anything) |
 | "Nothing was changed. Set up / repair stopped..." | Row 1 of a tab was sorted, renamed or deleted. Do what the message says (Version history is easiest), then run Set up / repair again |
+| `#REF!` in Results by Angle ("Array result was not expanded") | Fixed in v34. **Check for updates now**, reload, then **What's new → Apply the update to this sheet** |
 | `#VALUE!` on Dashboard | The Goal in Settings must be a plain number, e.g. 5000 |
 | Leads with no Gmail | Connect your Gmails, then "Spread waiting leads across inboxes" |
