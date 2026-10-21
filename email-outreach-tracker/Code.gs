@@ -905,7 +905,12 @@ function buildDashboard_(ss) {
   d.getRange(P + 1, 2, statusRows.length + 1, 7).setBorder(true, true, true, true, null, null, T.line, SpreadsheetApp.BorderStyle.SOLID);
 
   var VAR = 'INDEX(Leads!$A:$BZ,0,MATCH("Variant",Leads!$1:$1,0))';
-  d.getRange(P + 2, 10).setFormula('=IFERROR(SORT(UNIQUE(FILTER(' + VAR + ',' + VAR + '<>"",' + VAR + '<>"Variant"))),"")');
+  var ANGLES = 'FILTER(' + VAR + ',' + VAR + '<>"",' + VAR + '<>"Variant")';
+  var angleRows = lastStatusRow - P - 1;
+  // The most-used angles, cut to the rows the panel has. Without the cut, more angles than rows
+  // would spill into the note below and the whole panel would show #REF!.
+  d.getRange(P + 2, 10).setFormula('=IFERROR(ARRAY_CONSTRAIN(QUERY(' + ANGLES + ',"select Col1, count(Col1) group by Col1 ' +
+    'order by count(Col1) desc label count(Col1) \'\'",0),' + angleRows + ',1),"")');
   for (var ar = P + 2; ar <= lastStatusRow; ar++) {
     var A = '$J' + ar;
     d.getRange(ar, 10, 1, 7).setBackground((ar - P) % 2 ? T.ivory : '#FFFFFF');
@@ -918,7 +923,9 @@ function buildDashboard_(ss) {
     d.getRange(ar, 15).setNumberFormat(pct).setFontWeight('bold');
   }
   d.getRange(P + 1, 10, statusRows.length + 1, 7).setBorder(true, true, true, true, null, null, T.line, SpreadsheetApp.BorderStyle.SOLID);
-  d.getRange(lastStatusRow + 1, 10, 1, 7).merge().setValue('Judge an angle only after about 100 leads emailed with it. Positive = interested + meetings.')
+  var nAngles = 'IFERROR(COUNTUNIQUE(' + ANGLES + '),0)';
+  d.getRange(lastStatusRow + 1, 10, 1, 7).merge().setFormula('=IF(' + nAngles + '>' + angleRows + ',"Showing the ' + angleRows +
+    ' most-used of "&' + nAngles + '&" angles. ","")&"Judge an angle only after about 100 leads emailed with it. Positive = interested + meetings."')
     .setFontStyle('italic').setFontSize(8).setFontColor(T.muted);
 
   // day by day
