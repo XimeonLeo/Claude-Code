@@ -179,6 +179,28 @@ Status back to New (or In sequence for a follow-up). Other leads keep sending in
 | Daily standard (emails sent per day) | (blank) | What "My last 24 hours" checks against. Blank = what your active Gmails can send today |
 | Pause everything | FALSE | Set to TRUE to stop all sending |
 
+## Follow-ups
+
+Follow-ups go out **by themselves**: follow-up 1 three days after the first email, follow-up 2 four days after that
+(Settings), from the same Gmail, in the same email thread. They go before new leads and stop as soon as someone
+replies, bounces or asks to be removed. The text comes from the lead's **Follow-up 1 / 2 Message** cells
+(or the default in Settings).
+
+**How they're going:** the Dashboard's **Follow-ups** section (near the bottom, every layout):
+
+| Card | Meaning |
+|---|---|
+| Follow-ups sent today | Plus all time |
+| Due today | Follow-ups that should go out today (plus the next 3 days) |
+| Overdue (over 1 day) | Should have gone more than a day ago. **Should be 0.** If not, the Gmail that sent those leads' first email has stopped: check its Last Run / Last Result on Inboxes |
+| Replies after a follow-up | People who replied only after a follow-up, and their share of all replies |
+| Follow-up reply rate | Those replies ÷ leads that got follow-up 1 |
+| Waiting for a follow-up / Finished all emails | Leads In sequence / Completed |
+
+The same numbers are in **My last 24 hours** and, for the admin, on the **Leaderboard** (Follow-ups sent, today,
+late, replies after follow-up). Each lead's row shows when each email went (**Email 1 Sent**, **Follow-up 1 Sent**,
+**Follow-up 2 Sent**) and when the next is due (**Next Send**).
+
 ## Replies
 
 Each Gmail checks for replies about every 25 minutes. A reply turns the lead **Replied**, stops

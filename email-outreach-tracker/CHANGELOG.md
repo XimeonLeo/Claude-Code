@@ -2,6 +2,15 @@
 
 Every version of the outreach tracker, newest first. The same list is in the sheet: **📧 Outreach → What's new**.
 
+## v35 · 2026-10-21 · Follow-up tracking
+
+- **New:** A Follow-ups section on the Dashboard (every layout): sent today and all time, due today and in the next 3 days, overdue, replies after a follow-up, follow-up reply rate, leads waiting for a follow-up, and leads that finished all emails. _Where: Dashboard → Follow-ups (near the bottom). Click "Apply the update to this sheet" below_
+- **New:** The 24-hour report has a Follow-ups part: sent, due today, overdue and replies after a follow-up. Late follow-ups are listed under "To check". _Where: Outreach → My last 24 hours (report)_
+- **New:** Leaderboard columns: Follow-ups sent, Follow-ups today, Follow-ups late, Replies after follow-up. Team checks flag follow-ups more than a day late. _Where: Leaderboard and Team tabs (admin)_
+- **Fixed:** The Dashboard footer showed "vv34". _Where: Dashboard footer_
+
+After this update, click **📧 Outreach → 1. Set up / repair this sheet** (or **Apply the update to this sheet** in What's new).
+
 ## v34 · 2026-10-21 · Changelog, and the Results by Angle fix
 
 - **New:** This "What's new" window. It opens from the menu after every update, shows what changed and where to find it, and keeps the full history. _Where: Outreach → What's new_

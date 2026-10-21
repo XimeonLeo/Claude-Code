@@ -35,8 +35,8 @@ if (typeof OUTREACH_CONFIG === 'object' && OUTREACH_CONFIG) {
 
 // Change both every time you publish a new version, and add what changed to CHANGELOG (further down).
 // People see the version in Outreach -> Which Gmail am I using?, and the changes in Outreach -> What's new.
-var CORE_BUILD = 34;
-var CORE_VERSION = 'v34';
+var CORE_BUILD = 35;
+var CORE_VERSION = 'v35';
 
 // ---------------------------------------------------------------- admins
 // Only these Gmails can use "Outreach -> Admin: watch team sheets".
@@ -736,6 +736,12 @@ function buildDashboard_(ss) {
     ['bounceRate', '=IFERROR({bounceAll}/{sentAll},0)'],
     ['bounceRateToday', '=IFERROR({bounceToday}/{sentToday},0)'],
     ['interested', '=COUNTIF(' + LC('Outcome') + ',"Interested")'],
+    ['fu1All', '=' + LOG('SENT_FU1')], ['fu2All', '=' + LOG('SENT_FU2')],
+    ['fuDue', '=COUNTIFS(' + LC('Status') + ',"In sequence",' + LC('Next Send') + ',"<"&(TODAY()+1))'],
+    ['fuNext3', '=COUNTIFS(' + LC('Status') + ',"In sequence",' + LC('Next Send') + ',">="&(TODAY()+1),' + LC('Next Send') + ',"<"&(TODAY()+4))'],
+    ['fuOverdue', '=COUNTIFS(' + LC('Status') + ',"In sequence",' + LC('Next Send') + ',"<"&(NOW()-1))'],
+    ['fuReplies', '=SUMPRODUCT(ISNUMBER(' + LC2('Replied At') + ')*ISNUMBER(' + LC2('Follow-up 1 Sent') + ')*(' +
+      LC2('Replied At') + '>' + LC2('Follow-up 1 Sent') + '))'],
     ['needOutcome', '=COUNTIFS(' + LC('Status') + ',"Replied",' + LC('Outcome') + ',"")'],
     ['followUp', '=COUNTIF(' + LC('Outcome') + ',"Interested")+COUNTIF(' + LC('Outcome') + ',"Follow up later")'],
     ['meetings', '=COUNTIF(' + LC('Outcome') + ',"Meeting booked")'],
@@ -811,10 +817,10 @@ function buildDashboard_(ss) {
 
   // Other layouts (Settings -> Dashboard layout) draw their own body between the header and the footer.
   var layout = layoutFor_(ss);
+  var ctx = { ss: ss, d: d, T: T, X: X, V: V, LC: LC, LC2: LC2, IC2: IC2, It: It, bar: bar,
+              section: section, cardRow: cardRow, num: num, pct: pct };
   if (layout !== 'Classic' && DASH_LAYOUTS_[layout]) {
-    var ctx = { ss: ss, d: d, T: T, X: X, V: V, LC: LC, LC2: LC2, IC2: IC2, It: It, bar: bar,
-                section: section, cardRow: cardRow, num: num, pct: pct };
-    dashFooter_(d, T, DASH_LAYOUTS_[layout](ctx));
+    dashFooter_(d, T, followUpPanel_(ctx, DASH_LAYOUTS_[layout](ctx)));
     return;
   }
 
@@ -993,16 +999,43 @@ function buildDashboard_(ss) {
     .build();
   d.insertChart(chart);
 
-  dashFooter_(d, T, chartRow + 16);
+  dashFooter_(d, T, followUpPanel_(ctx, chartRow + 16));
 }
 
 // The credit strip at the bottom of every Dashboard layout. Rows after it are removed.
+// "Follow-ups" section, drawn on every layout just above the footer. Returns the footer's new row.
+function followUpPanel_(c, row) {
+  var d = c.d, T = c.T;
+  var need = row + 18;
+  if (d.getMaxRows() < need) {
+    var have = d.getMaxRows();
+    d.insertRowsAfter(have, need - have);
+    d.getRange(have + 1, 1, need - have, d.getMaxColumns()).setBackground(T.ivory).setFontFamily(T.body)
+      .setFontSize(10).setFontColor(T.ink).setVerticalAlignment('middle');
+  }
+  c.section(row, 'Follow-ups');
+  c.cardRow(row + 1, [
+    { label: 'Follow-ups sent today', value: '={fuToday}', sub: '="All time: "&TEXT({fuAll},"#,##0")', dark: true },
+    { label: 'Due today', value: '={fuDue}', sub: '="Next 3 days: "&TEXT({fuNext3},"#,##0")' },
+    { label: 'Overdue (over 1 day)', value: '={fuOverdue}', sub: '=IF({fuOverdue}=0,"All on time","Check that Gmail on Inboxes")' },
+    { label: 'Replies after a follow-up', value: '={fuReplies}', sub: '=TEXT(IFERROR({fuReplies}/{replyAll},0),"0%")&" of all replies"',
+      bar: c.bar('{fuReplies}/{replyAll}') }
+  ]);
+  c.cardRow(row + 7, [
+    { label: 'Follow-up 1 sent', value: '={fu1All}', sub: '="Follow-up 2 sent: "&TEXT({fu2All},"#,##0")' },
+    { label: 'Follow-up reply rate', value: '=IFERROR({fuReplies}/{fu1All},0)', fmt: c.pct, sub: '="Replies per lead followed up"' },
+    { label: 'Waiting for a follow-up', value: '={inSeq}', sub: '="Leads in sequence"' },
+    { label: 'Finished all emails', value: '={completed}', sub: '="No reply after the last email"' }
+  ]);
+  return row + 14;
+}
+
 function dashFooter_(d, T, foot) {
   d.setRowHeight(foot - 1, 18);
   d.setRowHeight(foot, 36);
   d.getRange(foot, 2, 1, 15).setBackground(T.navy)
     .setBorder(true, null, null, null, null, null, T.gold, SpreadsheetApp.BorderStyle.SOLID_THICK);
-  d.getRange(foot, 2, 1, 7).merge().setValue('  ' + BRAND.name.toUpperCase() + '   ·   v' + CORE_VERSION)
+  d.getRange(foot, 2, 1, 7).merge().setValue('  ' + BRAND.name.toUpperCase() + '   ·   ' + CORE_VERSION)
     .setFontColor(T.gold2).setFontSize(8).setFontWeight('bold');
   d.getRange(foot, 10, 1, 7).merge().setValue(BRAND.credit + '  ').setFontFamily(T.head).setFontStyle('italic')
     .setFontSize(11).setFontColor(T.gold2).setHorizontalAlignment('right');
@@ -2471,6 +2504,12 @@ function encodeHeader_(s) {
 // Each item: [kind, what changed, where to find it]. kind: New, Improved, Fixed, Changed or Removed.
 // repair: true = people should click "Apply the update to this sheet" (runs Set up / repair).
 var CHANGELOG = [
+  { v: 35, date: '2026-10-21', title: 'Follow-up tracking', repair: true, items: [
+    ['New', 'A Follow-ups section on the Dashboard (every layout): sent today and all time, due today and in the next 3 days, overdue, replies after a follow-up, follow-up reply rate, leads waiting for a follow-up, and leads that finished all emails.', 'Dashboard -> Follow-ups (near the bottom). Click "Apply the update to this sheet" below'],
+    ['New', 'The 24-hour report has a Follow-ups part: sent, due today, overdue and replies after a follow-up. Late follow-ups are listed under "To check".', 'Outreach -> My last 24 hours (report)'],
+    ['New', 'Leaderboard columns: Follow-ups sent, Follow-ups today, Follow-ups late, Replies after follow-up. Team checks flag follow-ups more than a day late.', 'Leaderboard and Team tabs (admin)'],
+    ['Fixed', 'The Dashboard footer showed "vv34".', 'Dashboard footer']
+  ] },
   { v: 34, date: '2026-10-21', title: 'Changelog, and the Results by Angle fix', repair: true, items: [
     ['New', 'This "What\'s new" window. It opens from the menu after every update, shows what changed and where to find it, and keeps the full history.', 'Outreach -> What\'s new'],
     ['New', 'Version numbers now count up (v34, v35...) instead of dates.', 'Outreach -> Which Gmail am I using?'],
@@ -2797,7 +2836,9 @@ function reportData_(ss, now) {
   var r = { campaign: st.name, by: me_(), made: fmt(now, 'EEE d MMM yyyy, HH:mm'), from: fmt(since, 'EEE d MMM, HH:mm'),
             sent24: 0, first24: 0, fu24: 0, replies24: 0, bounces24: 0, sentAll: 0, repliesAll: 0, bouncesAll: 0,
             leads: 0, waiting: 0, imported24: 0, needOutcome: 0, followUp: 0, interested: 0, meetings: 0,
+            fuAll: 0, fuDue: 0, fuOverdue: 0, fuReplies24: 0, fuRepliesAll: 0, inSeq: 0,
             inboxes: [], problems: [] };
+  var tomorrow = new Date(startOfToday_(ss).getTime() + DAY);
 
   var lg = ss.getSheetByName(SHEET.LOG);
   if (lg.getLastRow() > 1) {
@@ -2805,6 +2846,7 @@ function reportData_(ss, now) {
       var ev = String(x[3]), recent = x[0] instanceof Date && x[0] >= since;
       if (ev.indexOf('SENT') === 0) {
         r.sentAll++;
+        if (ev !== 'SENT_1') r.fuAll++;
         if (recent) { r.sent24++; if (ev === 'SENT_1') r.first24++; else r.fu24++; }
       } else if (ev === 'REPLY' || ev === 'UNSUB') {
         r.repliesAll++; if (recent) r.replies24++;
@@ -2822,6 +2864,17 @@ function reportData_(ss, now) {
       r.leads++;
       var status = String(x[lc['Status']] || '').trim();
       if (status === STATUS.NEW) r.waiting++;
+      if (status === STATUS.ACTIVE) {
+        r.inSeq++;
+        var next = x[lc['Next Send']];
+        if (next instanceof Date && next < tomorrow) r.fuDue++;
+        if (next instanceof Date && now - next > DAY) r.fuOverdue++;
+      }
+      var rep = x[lc['Replied At']], fu1 = x[lc['Follow-up 1 Sent']];
+      if (rep instanceof Date && fu1 instanceof Date && rep > fu1) {
+        r.fuRepliesAll++;
+        if (rep >= since) r.fuReplies24++;
+      }
       var imp = x[lc['Imported At']];
       if (imp instanceof Date && imp >= since) r.imported24++;
       var c = replyCategory_(x, lc);
@@ -2854,6 +2907,7 @@ function reportData_(ss, now) {
   r.standard = st.standard > 0 ? st.standard : capacity;
   r.met = r.standard > 0 && r.sent24 >= r.standard;
 
+  if (r.fuOverdue) r.problems.push(r.fuOverdue + ' follow-up(s) more than a day late: the Gmail that sent their first email may have stopped (Inboxes -> Last Run, Last Result).');
   // Why it fell short (only shown when it did)
   if (!r.met) {
     if (st.paused) r.problems.push('Sending is paused (Settings -> Pause everything).');
@@ -2861,7 +2915,7 @@ function reportData_(ss, now) {
     else if (r.waiting < r.standard) r.problems.push('Only ' + r.waiting + ' new leads waiting: not enough for a full day (' + r.standard + ').');
     if (!r.inboxes.length) r.problems.push('No Gmail connected.');
     r.inboxes.forEach(function (i) { if (i.state !== 'Sending') r.problems.push(i.email + ': ' + i.state + '.'); });
-    if (!r.problems.length) r.problems.push('Gmails and leads look fine: it may still be catching up (warm-up, send window, or follow-ups not due).');
+    if (r.problems.length === (r.fuOverdue ? 1 : 0)) r.problems.push('Gmails and leads look fine: it may still be catching up (warm-up, send window, or follow-ups not due).');
   }
 
   // Goal
@@ -2891,7 +2945,12 @@ function reportText_(r) {
     '• New leads uploaded: ' + r.imported24,
     '• New leads waiting: ' + r.waiting
   ];
-  if (!r.met) lines = lines.concat(['', 'WHY IT FELL SHORT']).concat(r.problems.map(function (x) { return '• ' + x; }));
+  lines = lines.concat(['', 'FOLLOW-UPS',
+    '• Sent in 24 hours: ' + r.fu24 + ' (all time: ' + r.fuAll + ')',
+    '• Due today: ' + r.fuDue + '   · Overdue: ' + r.fuOverdue,
+    '• Replies after a follow-up: ' + r.fuReplies24 + ' in 24 hours (' + r.fuRepliesAll + ' all time)',
+    '• Waiting for a follow-up: ' + r.inSeq]);
+  if (r.problems.length) lines = lines.concat(['', r.met ? 'TO CHECK' : 'WHY IT FELL SHORT']).concat(r.problems.map(function (x) { return '• ' + x; }));
   return lines.concat([
     '',
     'CAMPAIGN SO FAR',
@@ -2939,7 +2998,13 @@ function reportHtml_(T, r) {
     tile('Need an outcome', r.needOutcome, 'replies not marked yet', r.needOutcome ? 'bad' : '') +
     tile('To follow up', r.followUp, r.interested + ' interested') +
     '</div>' +
-    (r.met ? '' : '<div class="why"><b>Why it fell short</b><ul>' + r.problems.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>') +
+    '<h3>FOLLOW-UPS</h3><div class="grid">' +
+    tile('Sent (24 hours)', r.fu24, 'all time: ' + r.fuAll) +
+    tile('Due today', r.fuDue, r.inSeq + ' waiting in total') +
+    tile('Overdue', r.fuOverdue, 'more than a day late', r.fuOverdue ? 'bad' : 'good') +
+    tile('Replies after a follow-up', r.fuReplies24, r.fuRepliesAll + ' all time') +
+    '</div>' +
+    (!r.problems.length ? '' : '<div class="why"><b>' + (r.met ? 'To check' : 'Why it fell short') + '</b><ul>' + r.problems.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>') +
     '<h3>CAMPAIGN SO FAR</h3>' +
     '<div style="font-size:13px"><b>Goal:</b> ' + r.delivered + ' of ' + r.goal + ' delivered (' + p(r.progress) + ')' +
     (r.daysLeft ? ' · ' + r.daysLeft + ' days left · ' + r.perDay + ' a day needed' : '') + '</div>' +
@@ -3196,9 +3261,10 @@ function buildLeaderboard_(ss, board, now) {
   sh.setHiddenGridlines(true);
   sh.setTabColor(T.gold);
   var heads = ['Rank', 'Name', 'Leads', 'Sent today', 'Sent (7 days)', 'Total sent', 'Replies', 'Reply %',
-               'Bounces', 'Bounce %', 'Meetings', 'Need outcome', 'To follow up', 'Status'];
+               'Bounces', 'Bounce %', 'Meetings', 'Need outcome', 'To follow up', 'Follow-ups sent', 'Follow-ups today',
+               'Follow-ups late', 'Replies after follow-up', 'Status'];
   var W = heads.length;
-  var widths = [70, 200, 90, 100, 110, 110, 90, 90, 90, 90, 100, 110, 110, 130];
+  var widths = [70, 200, 90, 100, 110, 110, 90, 90, 90, 90, 100, 110, 110, 120, 120, 120, 150, 130];
   widths.forEach(function (w, i) { sh.setColumnWidth(i + 1, w); });
 
   board.sort(function (a, b) {
@@ -3208,13 +3274,15 @@ function buildLeaderboard_(ss, board, now) {
   var rows = board.map(function (e, i) {
     var t = e.stats;
     return [medal[i] || String(i + 1), e.name, t.leads || 0, t.sentToday, t.sent7, t.totalSent, t.replies,
-            t.replyPct, t.bounced || 0, t.bouncePct, t.meetings, t.needOutcome || 0, t.followUp || 0, e.status];
+            t.replyPct, t.bounced || 0, t.bouncePct, t.meetings, t.needOutcome || 0, t.followUp || 0,
+            t.fuSent || 0, t.fuToday || 0, t.fuOverdue || 0, t.fuReplies || 0, e.status];
   });
   var sum = function (k) { return board.reduce(function (s, e) { return s + (Number(e.stats[k]) || 0); }, 0); };
   var emailed = sum('emailed');
   var totals = ['', 'TEAM TOTAL', sum('leads'), sum('sentToday'), sum('sent7'), sum('totalSent'), sum('replies'),
                 emailed ? sum('replies') / emailed : 0, sum('bounced'), emailed ? sum('bounced') / emailed : 0,
-                sum('meetings'), sum('needOutcome'), sum('followUp'), board.length + ' people'];
+                sum('meetings'), sum('needOutcome'), sum('followUp'), sum('fuSent'), sum('fuToday'), sum('fuOverdue'),
+                sum('fuReplies'), board.length + ' people'];
 
   sh.getRange(1, 1, 2, W).setBackground(T.navy);
   sh.setRowHeight(1, 44); sh.setRowHeight(2, 26);
@@ -3295,7 +3363,7 @@ function analyzeTeam_(d, prev, now, todayStart) {
     if (missingCols.length) add('red', 'cols', 'Leads columns deleted or renamed: ' + missingCols.join(', '), HOW_REPAIR);
   }
   var s = { leads: 0, waiting: 0, totalSent: 0, emailed: 0, replies: 0, bounced: 0, meetings: 0,
-            resetToNew: 0, handReplied: 0, dupes: 0, needOutcome: 0, followUp: 0 };
+            resetToNew: 0, handReplied: 0, dupes: 0, needOutcome: 0, followUp: 0, fuOverdue: 0, fuReplies: 0 };
   var seen = {};
   for (var r = 1; r < leads.length; r++) {
     var row = leads[r];
@@ -3318,6 +3386,9 @@ function analyzeTeam_(d, prev, now, todayStart) {
     if (status === STATUS.BOUNCED) s.bounced++;
     var oc = String(row[lh['Outcome']] || '');
     if (oc === 'Meeting booked' || oc === 'Customer') s.meetings++;
+    var nx = row[lh['Next Send']], f1 = row[lh['Follow-up 1 Sent']];
+    if (status === STATUS.ACTIVE && nx instanceof Date && now - nx > day) s.fuOverdue++;
+    if (repliedAt instanceof Date && f1 instanceof Date && repliedAt > f1) s.fuReplies++;
     var rc = replyCategory_(row, lh);
     if (rc === 'need') s.needOutcome++;
     if (rc === 'follow') s.followUp++;
@@ -3326,7 +3397,7 @@ function analyzeTeam_(d, prev, now, todayStart) {
   // Log
   var log = d.log || [[]];
   var gh = idx(log[0]);
-  var logRows = 0, logSends = 0, sentToday = 0, sent7 = 0, lastSent = null;
+  var logRows = 0, logSends = 0, sentToday = 0, sent7 = 0, lastSent = null, fuSent = 0, fuToday = 0;
   for (var i = 1; i < log.length; i++) {
     var ev = String(log[i][gh['Event']] || '');
     var ts = log[i][gh['Timestamp']];
@@ -3334,6 +3405,7 @@ function analyzeTeam_(d, prev, now, todayStart) {
     logRows++;
     if (SENT_EVENTS.indexOf(ev) < 0) continue;
     logSends++;
+    if (ev !== 'SENT_1') { fuSent++; if (ts instanceof Date && ts >= todayStart) fuToday++; }
     if (ts instanceof Date) {
       if (ts >= todayStart) sentToday++;
       if (now - ts < 7 * day) sent7++;
@@ -3405,6 +3477,7 @@ function analyzeTeam_(d, prev, now, todayStart) {
       (!lastSent || now - lastSent > 26 * 3600000)) {
     add('yellow', 'idle', 'Nothing sent in the last 24 hours, but ' + s.waiting + ' leads are waiting', 'Their Inboxes tab: read Last Result.');
   }
+  if (s.fuOverdue) add('yellow', 'fuOverdue', s.fuOverdue + ' follow-ups more than a day late (a Gmail may have stopped)', 'Their Inboxes tab: Last Run and Last Result.');
   if (d.leads && s.waiting === 0 && s.leads > 0 && !st.paused) add('yellow', 'empty', 'No leads waiting: they need to upload more', '');
 
   return {
@@ -3413,7 +3486,8 @@ function analyzeTeam_(d, prev, now, todayStart) {
              sentToday: sentToday, sent7: sent7, totalSent: s.totalSent, bouncePct: bouncePct,
              replies: s.replies, replyPct: s.emailed ? s.replies / s.emailed : 0, meetings: s.meetings,
              waiting: s.waiting, activeInboxes: active, inboxes: inboxes, lastSent: lastSent,
-             needOutcome: s.needOutcome, followUp: s.followUp },
+             needOutcome: s.needOutcome, followUp: s.followUp,
+             fuSent: fuSent, fuToday: fuToday, fuOverdue: s.fuOverdue, fuReplies: s.fuReplies },
     snapshot: { leads: s.leads, waiting: s.waiting, totalSent: s.totalSent, logRows: logRows,
                 logSends: logSends, replies: s.replies, bounced: s.bounced, dnc: dnc }
   };
