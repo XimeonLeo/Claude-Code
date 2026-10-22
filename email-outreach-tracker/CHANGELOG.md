@@ -2,6 +2,16 @@
 
 Every version of the outreach tracker, newest first. The same list is in the sheet: **📧 Outreach → What's new**.
 
+## v36 · 2026-10-22 · Choose your own daily limit
+
+- **Changed:** The daily limit can now be anything from 1 to 500 (it was 1 to 50). 35 or less is still safest for a free Gmail. _Where: Settings → Default daily limit per inbox_
+- **New:** Each Gmail can have its own daily limit: type it in that Gmail's Daily Limit cell. Blank = the Settings default. _Where: Inboxes tab → Daily Limit column_
+- **Improved:** When warm-up keeps a Gmail below its limit, Last Result now says so ("warming up: +5 a day until 60") instead of just "Daily limit reached". _Where: Inboxes tab → Last Result_
+- **Improved:** With a high limit, the pauses between emails get shorter, so a Gmail never runs out of Google's daily script time and stops halfway through the day. _Where: Automatic_
+- **Changed:** Admin: a daily limit above 35 is still flagged 🟡, now with which Gmails and their limits. _Where: Team tab (admin)_
+
+After this update, click **📧 Outreach → 1. Set up / repair this sheet** (or **Apply the update to this sheet** in What's new).
+
 ## v35 · 2026-10-21 · Follow-up tracking
 
 - **New:** A Follow-ups section on the Dashboard (every layout): sent today and all time, due today and in the next 3 days, overdue, replies after a follow-up, follow-up reply rate, leads waiting for a follow-up, and leads that finished all emails. _Where: Dashboard → Follow-ups (near the bottom). Click "Apply the update to this sheet" below_

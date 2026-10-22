@@ -35,8 +35,13 @@ if (typeof OUTREACH_CONFIG === 'object' && OUTREACH_CONFIG) {
 
 // Change both every time you publish a new version, and add what changed to CHANGELOG (further down).
 // People see the version in Outreach -> Which Gmail am I using?, and the changes in Outreach -> What's new.
-var CORE_BUILD = 35;
-var CORE_VERSION = 'v35';
+var CORE_BUILD = 36;
+var CORE_VERSION = 'v36';
+
+// Daily limits: anything from 1 up to Gmail's own cap. Above SAFE_LIMIT a free Gmail is more likely to be
+// flagged, so the sheet warns but allows it.
+var MAX_LIMIT = 500;
+var SAFE_LIMIT = 35;
 
 // ---------------------------------------------------------------- admins
 // Only these Gmails can use "Outreach -> Admin: watch team sheets".
@@ -102,7 +107,7 @@ var SETTINGS_DEF = [
   { key: 'goal', label: 'Goal (delivered messages)', value: 5000, note: 'Delivered = sent minus bounced. Counts first emails and follow-ups.' },
   { key: 'start', label: 'Campaign start date', value: 'TODAY', note: 'Day 1 of the campaign.' },
   { key: 'length', label: 'Campaign length (days)', value: 11, note: '' },
-  { key: 'dailyLimit', label: 'Default daily limit per inbox', value: 35, note: 'Max emails (first + follow-ups) per inbox per day. Override per inbox in the Inboxes tab.' },
+  { key: 'dailyLimit', label: 'Default daily limit per inbox', value: 35, note: 'Max emails (first + follow-ups) per Gmail per day, 1 to 500. To give one Gmail its own limit, type it in that Gmail\'s Daily Limit cell on the Inboxes tab. Free Gmail: 35 or less is safest.' },
   { key: 'rampStart', label: 'Warm-up: day 1 limit', value: 20, note: 'Inboxes start lower and climb to the daily limit. Leave blank to skip warm-up.' },
   { key: 'rampStep', label: 'Warm-up: increase per day', value: 5, note: 'e.g. 20, 25, 30, 35...' },
   { key: 'followUps', label: 'Follow-ups per lead (0-2)', value: 2, note: '' },
@@ -225,7 +230,12 @@ function setupSheet() {
     SpreadsheetApp.newDataValidation()
       .requireValueInList(['Active', 'Paused', 'Paused - bounces'], true)
       .setAllowInvalid(true).build());
-  ib.getRange(2, icm['Last Run'] + 1, INBOX_FORMULA_ROWS, 1).setNumberFormat('yyyy-mm-dd hh:mm');
+  // Each Gmail's own daily limit (blank = the Settings default).
+  ib.getRange(2, icm['Daily Limit'] + 1, INBOX_FORMULA_ROWS, 1).setNumberFormat('0').setDataValidation(
+    SpreadsheetApp.newDataValidation().requireNumberBetween(1, MAX_LIMIT).setAllowInvalid(false)
+      .setHelpText('This Gmail\'s own daily limit, 1 to ' + MAX_LIMIT + '. Leave blank to use Settings -> Default daily limit per inbox.').build());
+  ib.getRange(1, icm['Daily Limit'] + 1).setNote('Type a number for this Gmail\'s own daily limit (1 to ' + MAX_LIMIT +
+    '). Blank = the default in Settings. Warm-up still starts new Gmails lower and climbs to this number.');
   ib.getRange(2, icm['Bounce %'] + 1, INBOX_FORMULA_ROWS, 1).setNumberFormat('0.0%');
   ib.getRange(2, icm['Reply %'] + 1, INBOX_FORMULA_ROWS, 1).setNumberFormat('0.0%');
   ib.setColumnWidth(icm['Inbox Email'] + 1, 240); ib.setColumnWidth(icm['Sender Name'] + 1, 180);
@@ -351,8 +361,8 @@ function settingsRules_(st) {
     goal: function () { return dv().requireNumberBetween(1, 1000000).setHelpText('A number, e.g. 5000'); },
     start: function () { return dv().requireDate().setHelpText('A date, e.g. 2026-10-20'); },
     length: function () { return dv().requireNumberBetween(1, 365).setHelpText('Number of days, e.g. 11'); },
-    dailyLimit: function () { return dv().requireNumberBetween(1, 50).setHelpText('1 to 50. Free Gmail: keep it at 35 or less'); },
-    rampStart: function () { return dv().requireNumberBetween(0, 50).setHelpText('0 to 50, e.g. 20 (blank = no warm-up)'); },
+    dailyLimit: function () { return dv().requireNumberBetween(1, MAX_LIMIT).setHelpText('1 to ' + MAX_LIMIT + '. Free Gmail: 35 or less is safest'); },
+    rampStart: function () { return dv().requireNumberBetween(0, MAX_LIMIT).setHelpText('0 to ' + MAX_LIMIT + ', e.g. 20 (blank = no warm-up)'); },
     followUps: function () { return dv().requireNumberBetween(0, 2).setHelpText('0, 1 or 2'); },
     fu1Days: function () { return dv().requireNumberBetween(1, 30).setHelpText('1 to 30 days, e.g. 3'); },
     fu2Days: function () { return dv().requireNumberBetween(1, 30).setHelpText('1 to 30 days, e.g. 4'); },
@@ -2087,8 +2097,11 @@ function runForInbox_(forceCheck) {
     if (scan.lastResume && scan.lastPause && scan.lastResume - scan.lastPause < 7 * 86400000) {
       limit = dailyLimitFor_(limit, st, dayIndex_(scan.lastResume, now, tz));
     }
+    var full = inbox.limit || st.dailyLimit;
+    var why = limit >= full ? '' : st.rampStep > 0 ? ' today (warming up: +' + st.rampStep + ' a day until ' + full + ')'
+      : ' (held at the warm-up day 1 limit, because Settings -> Warm-up: increase per day is 0)';
     var remaining = limit - scan.sentToday;
-    if (remaining <= 0) return done('Daily limit reached (' + limit + ').');
+    if (remaining <= 0) return done('Daily limit reached: ' + limit + why + '.');
     var quota = st.pace === 'Fast' ? remaining
       : runQuota_(remaining, hour * 60 + minute, st.endHour * 60, RUN_EVERY_MINUTES);
 
@@ -2225,13 +2238,17 @@ function runForInbox_(forceCheck) {
       }
 
       if (q < queue.length - 1) {
-        var wait = st.minDelay + Math.random() * Math.max(0, st.maxDelay - st.minDelay);
+        // Google allows each Gmail about 90 minutes of script time a day, and the pauses count.
+        // With a high daily limit the pauses get shorter, so the whole day fits in about 45 minutes.
+        var maxW = Math.min(st.maxDelay, Math.max(5, 2700 / limit));
+        var minW = Math.min(st.minDelay, maxW);
+        var wait = minW + Math.random() * Math.max(0, maxW - minW);
         if (Date.now() - started + wait * 1000 > RUN_BUDGET_MS) break;
         Utilities.sleep(Math.round(wait * 1000));
       }
     }
     return done('Sent ' + sentCount + ' email(s)' + (errors ? ', ' + errors + ' error(s) (see Log)' : '') +
-      '. Today: ' + (scan.sentToday + sentCount) + '/' + limit + '.');
+      '. Today: ' + (scan.sentToday + sentCount) + '/' + limit + why + '.');
   } finally {
     userLock.releaseLock();
   }
@@ -2504,6 +2521,13 @@ function encodeHeader_(s) {
 // Each item: [kind, what changed, where to find it]. kind: New, Improved, Fixed, Changed or Removed.
 // repair: true = people should click "Apply the update to this sheet" (runs Set up / repair).
 var CHANGELOG = [
+  { v: 36, date: '2026-10-22', title: 'Choose your own daily limit', repair: true, items: [
+    ['Changed', 'The daily limit can now be anything from 1 to 500 (it was 1 to 50). 35 or less is still safest for a free Gmail.', 'Settings -> Default daily limit per inbox'],
+    ['New', 'Each Gmail can have its own daily limit: type it in that Gmail\'s Daily Limit cell. Blank = the Settings default.', 'Inboxes tab -> Daily Limit column'],
+    ['Improved', 'When warm-up keeps a Gmail below its limit, Last Result now says so ("warming up: +5 a day until 60") instead of just "Daily limit reached".', 'Inboxes tab -> Last Result'],
+    ['Improved', 'With a high limit, the pauses between emails get shorter, so a Gmail never runs out of Google\'s daily script time and stops halfway through the day.', 'Automatic'],
+    ['Changed', 'Admin: a daily limit above 35 is still flagged 🟡, now with which Gmails and their limits.', 'Team tab (admin)']
+  ] },
   { v: 35, date: '2026-10-21', title: 'Follow-up tracking', repair: true, items: [
     ['New', 'A Follow-ups section on the Dashboard (every layout): sent today and all time, due today and in the next 3 days, overdue, replies after a follow-up, follow-up reply rate, leads waiting for a follow-up, and leads that finished all emails.', 'Dashboard -> Follow-ups (near the bottom). Click "Apply the update to this sheet" below'],
     ['New', 'The 24-hour report has a Follow-ups part: sent, due today, overdue and replies after a follow-up. Late follow-ups are listed under "To check".', 'Outreach -> My last 24 hours (report)'],
@@ -3416,11 +3440,12 @@ function analyzeTeam_(d, prev, now, todayStart) {
   // Inboxes
   var ibv = d.inboxes || [[]];
   var ih = idx(ibv[0]);
-  var inboxes = 0, active = 0, redHealth = 0;
+  var inboxes = 0, active = 0, redHealth = 0, highLimit = [];
   for (var j = 1; j < ibv.length; j++) {
     if (!isValidEmail_(normEmail_(ibv[j][ih['Inbox Email']]))) continue;
     inboxes++;
     if (isActive_(ibv[j][ih['Status']])) active++;
+    if (Number(ibv[j][ih['Daily Limit']]) > SAFE_LIMIT) highLimit.push(normEmail_(ibv[j][ih['Inbox Email']]) + ' (' + Number(ibv[j][ih['Daily Limit']]) + ')');
     if (String(ibv[j][ih['Health']] || '').indexOf('🔴') >= 0) redHealth++;
   }
 
@@ -3434,7 +3459,7 @@ function analyzeTeam_(d, prev, now, todayStart) {
     d.settings.forEach(function (x) { labels[String(x[0]).trim()] = true; });
     var gone = SETTINGS_DEF.filter(function (x) { return !labels[x.label] && !x.added && x.key !== 'theme' && x.key !== 'layout'; }).map(function (x) { return x.label; });
     if (gone.length) add('red', 'settingsRows', 'Settings rows deleted or renamed: ' + gone.join(', '), HOW_REPAIR);
-    if (st.dailyLimit > 35) add('yellow', 'limit', 'Daily limit raised to ' + st.dailyLimit + ' (max 35 for free Gmail)', 'Their Settings tab.');
+    if (st.dailyLimit > SAFE_LIMIT) add('yellow', 'limit', 'Default daily limit set to ' + st.dailyLimit + ' (above the safe ' + SAFE_LIMIT + ' for free Gmail)', 'Their Settings tab.');
     if (!st.rampStart) add('yellow', 'warmup', 'Warm-up turned off', 'Their Settings tab.');
     if (st.paused) add('yellow', 'paused', 'Sending is paused (Pause everything = TRUE)', 'Their Settings tab.');
     if (!st.optOut) add('yellow', 'optout', 'Opt-out line removed', 'Their Settings tab.');
@@ -3471,6 +3496,7 @@ function analyzeTeam_(d, prev, now, todayStart) {
   if (bouncePct > 0.03 && s.emailed >= 20) add('yellow', 'bounces', 'Bounce rate ' + (bouncePct * 100).toFixed(1) + '% (keep under 2%): lists not checked before upload?', 'Their Leads tab: filter Status = Bounced.');
   if (d.inboxes && inboxes === 0) add('yellow', 'noInbox', 'No Gmail connected yet', 'Their Inboxes tab.');
   else if (d.inboxes && active === 0) add('yellow', 'noActive', 'All Gmails are paused', 'Their Inboxes tab: Status column.');
+  if (highLimit.length) add('yellow', 'gmailLimit', 'Gmails with a daily limit above ' + SAFE_LIMIT + ': ' + highLimit.join(', '), 'Their Inboxes tab: Daily Limit column.');
   if (redHealth) add('yellow', 'health', redHealth + ' Gmail(s) paused for too many bounces', 'Their Inboxes tab: Health column.');
   var weekend = [0, 6].indexOf(now.getDay()) >= 0;
   if (!st.paused && active > 0 && s.waiting > 0 && !(weekend && !st.weekends) &&

@@ -165,7 +165,7 @@ Status back to New (or In sequence for a follow-up). Other leads keep sending in
 |---|---|---|
 | Goal | 5000 | Target on the Dashboard |
 | Campaign start date / length | today / 11 | For "days left" |
-| Default daily limit per inbox | 35 | Most emails per Gmail per day |
+| Default daily limit per inbox | 35 | Most emails per Gmail per day, **1 to 500**. 35 or less is safest for a free Gmail. To give **one Gmail its own limit**, type it in its **Daily Limit** cell on the Inboxes tab (blank = this default) |
 | Warm-up: day 1 limit / increase | 20 / 5 | New Gmails start at 20 a day, +5 a day |
 | Days before follow-up 1 / 2 | 3 / 4 | Follow-ups go in the same email thread |
 | Send window | 8 to 18 | Sending hours, in the sheet's time zone |
@@ -243,7 +243,11 @@ The numbers come from the Log and Leads tabs, so they're the same whenever anyon
 
 ## Rules for free Gmails
 
-- Never more than 35 a day per Gmail. Keep the warm-up on.
+- 35 a day per Gmail is the safe level. You **can** go higher (up to 500, per Gmail on the Inboxes tab), but the
+  higher you go, the more likely Google flags the Gmail. Raise it slowly, keep the warm-up on, and watch Health.
+- The warm-up counts from the **Campaign start date** (20 on day 1, +5 a day). Early in a campaign a Gmail can't
+  reach a high limit yet, and its **Last Result** says "warming up: +5 a day until 60". Later in a campaign a new
+  limit applies straight away, so raise it a little at a time (e.g. +10 every few days).
 - Check every list with an email checker before uploading.
 - A Gmail gets a warning or a phone check? Set it to **Paused** on Inboxes for a few days.
   Its waiting leads move to your other Gmails by themselves.
@@ -310,7 +314,7 @@ The history is stored in **your** sheet, so they can't change it.
 - 🔴 Leads, Log rows or Do Not Contact rows deleted. Total sent going down. A tab, column or Settings row deleted or renamed.
 - 🔴 The Leads tab and the Log don't agree (one of them was edited or cleared).
 - 🔴 You can't open their sheet any more (they removed your access).
-- 🟡 Daily limit above 35, warm-up off, opt-out line removed, follow-ups off, sending paused.
+- 🟡 Daily limit above 35 (in Settings, or for a Gmail on Inboxes), warm-up off, opt-out line removed, follow-ups off, sending paused.
 - 🟡 Leads set back to New after being emailed, leads marked Replied by hand, duplicate leads.
 - 🟡 High bounce rate, Gmails paused, nothing sent in 24 hours, no leads waiting.
 
