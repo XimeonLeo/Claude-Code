@@ -35,8 +35,8 @@ if (typeof OUTREACH_CONFIG === 'object' && OUTREACH_CONFIG) {
 
 // Change both every time you publish a new version, and add what changed to CHANGELOG (further down).
 // People see the version in Outreach -> Which Gmail am I using?, and the changes in Outreach -> What's new.
-var CORE_BUILD = 36;
-var CORE_VERSION = 'v36';
+var CORE_BUILD = 37;
+var CORE_VERSION = 'v37';
 
 // Daily limits: anything from 1 up to Gmail's own cap. Above SAFE_LIMIT a free Gmail is more likely to be
 // flagged, so the sheet warns but allows it.
@@ -94,7 +94,8 @@ var SENT_EVENTS = ['SENT_1', 'SENT_FU1', 'SENT_FU2'];
 
 var INBOX_HEADERS = ['Inbox Email', 'Sender Name', 'Daily Limit', 'Status',
   'Connected', 'Last Run', 'Sent Today', 'Total Sent', 'Bounces', 'Bounce %',
-  'Replies', 'Reply %', 'Leads Assigned', 'Leads Waiting', 'Health', 'Notes', 'Last Result'];
+  'Replies', 'Reply %', 'Leads Assigned', 'Leads Waiting', 'Health', 'Notes', 'Last Result',
+  'Warm-up Day 1', 'Warm-up Per Day'];
 var INBOX_FORMULA_ROWS = 60;
 
 var LOG_HEADERS = ['Timestamp', 'Inbox', 'Lead Email', 'Event', 'Lead ID',
@@ -234,6 +235,15 @@ function setupSheet() {
   ib.getRange(2, icm['Daily Limit'] + 1, INBOX_FORMULA_ROWS, 1).setNumberFormat('0').setDataValidation(
     SpreadsheetApp.newDataValidation().requireNumberBetween(1, MAX_LIMIT).setAllowInvalid(false)
       .setHelpText('This Gmail\'s own daily limit, 1 to ' + MAX_LIMIT + '. Leave blank to use Settings -> Default daily limit per inbox.').build());
+  // Each Gmail's own warm-up (blank = the Settings warm-up).
+  [['Warm-up Day 1', 'Emails on this Gmail\'s first day, 0 to ' + MAX_LIMIT + '. 0 = no warm-up for this Gmail. Blank = Settings -> Warm-up: day 1 limit.'],
+   ['Warm-up Per Day', 'How many more each day, 0 to ' + MAX_LIMIT + '. Blank = Settings -> Warm-up: increase per day.']].forEach(function (w) {
+    if (icm[w[0]] === undefined) return;
+    ib.getRange(2, icm[w[0]] + 1, INBOX_FORMULA_ROWS, 1).setNumberFormat('0').setDataValidation(
+      SpreadsheetApp.newDataValidation().requireNumberBetween(0, MAX_LIMIT).setAllowInvalid(false).setHelpText(w[1]).build());
+    ib.getRange(1, icm[w[0]] + 1).setNote(w[1] + ' The warm-up counts from the Campaign start date.');
+    ib.setColumnWidth(icm[w[0]] + 1, 130);
+  });
   ib.getRange(1, icm['Daily Limit'] + 1).setNote('Type a number for this Gmail\'s own daily limit (1 to ' + MAX_LIMIT +
     '). Blank = the default in Settings. Warm-up still starts new Gmails lower and climbs to this number.');
   ib.getRange(2, icm['Bounce %'] + 1, INBOX_FORMULA_ROWS, 1).setNumberFormat('0.0%');
@@ -452,7 +462,7 @@ function addGuards_(ss) {
 // means someone renamed, deleted or moved a column, so repair must not guess.
 var ADDED_LATER = {
   'Leads': ['Message', 'Follow-up 1 Message', 'Follow-up 2 Message', 'Variant'],
-  'Inboxes': ['Last Result']
+  'Inboxes': ['Last Result', 'Warm-up Day 1', 'Warm-up Per Day']
 };
 
 // Returns a message explaining what is wrong with the header rows, or '' if all is fine.
@@ -2092,14 +2102,15 @@ function runForInbox_(forceCheck) {
         (st.autoResume > 0 ? ' It restarts by itself in ' + st.autoResume + ' day(s).' : ''));
     }
 
-    var limit = dailyLimitFor_(inbox.limit || st.dailyLimit, st, dayIndex_(st.start, now, tz));
+    var ramp = rampFor_(st, inbox);
+    var limit = dailyLimitFor_(inbox.limit || st.dailyLimit, ramp, dayIndex_(st.start, now, tz));
     // Turned back on within a week of a bounce pause: warm up again from day 1.
     if (scan.lastResume && scan.lastPause && scan.lastResume - scan.lastPause < 7 * 86400000) {
-      limit = dailyLimitFor_(limit, st, dayIndex_(scan.lastResume, now, tz));
+      limit = dailyLimitFor_(limit, ramp, dayIndex_(scan.lastResume, now, tz));
     }
     var full = inbox.limit || st.dailyLimit;
-    var why = limit >= full ? '' : st.rampStep > 0 ? ' today (warming up: +' + st.rampStep + ' a day until ' + full + ')'
-      : ' (held at the warm-up day 1 limit, because Settings -> Warm-up: increase per day is 0)';
+    var why = limit >= full ? '' : ramp.rampStep > 0 ? ' today (warming up: +' + ramp.rampStep + ' a day until ' + full + ')'
+      : ' (held at the warm-up day 1 limit, because the warm-up increase per day is 0)';
     var remaining = limit - scan.sentToday;
     if (remaining <= 0) return done('Daily limit reached: ' + limit + why + '.');
     var quota = st.pace === 'Fast' ? remaining
@@ -2521,6 +2532,11 @@ function encodeHeader_(s) {
 // Each item: [kind, what changed, where to find it]. kind: New, Improved, Fixed, Changed or Removed.
 // repair: true = people should click "Apply the update to this sheet" (runs Set up / repair).
 var CHANGELOG = [
+  { v: 37, date: '2026-10-22', title: 'Choose your own warm-up', repair: true, items: [
+    ['New', 'Each Gmail can have its own warm-up: how many on day 1, and how many more each day. Blank = the Settings warm-up. 0 on day 1 = no warm-up for that Gmail.', 'Inboxes tab -> Warm-up Day 1 and Warm-up Per Day columns (far right). Click "Apply the update to this sheet" below to add them'],
+    ['Changed', 'The Settings warm-up accepts 0 to 500 on day 1 (it was 0 to 50).', 'Settings -> Warm-up: day 1 limit'],
+    ['Changed', 'Admin: Gmails with their warm-up turned off are flagged 🟡.', 'Team tab (admin)']
+  ] },
   { v: 36, date: '2026-10-22', title: 'Choose your own daily limit', repair: true, items: [
     ['Changed', 'The daily limit can now be anything from 1 to 500 (it was 1 to 50). 35 or less is still safest for a free Gmail.', 'Settings -> Default daily limit per inbox'],
     ['New', 'Each Gmail can have its own daily limit: type it in that Gmail\'s Daily Limit cell. Blank = the Settings default.', 'Inboxes tab -> Daily Limit column'],
@@ -2922,7 +2938,7 @@ function reportData_(ss, now) {
     var last = row[ic['Last Run']];
     var running = last instanceof Date && now - last < STUCK_HOURS * 3600000;
     var active = isActive_(i.status);
-    if (active) capacity += dailyLimitFor_(i.limit || st.dailyLimit, st, dayIdx);
+    if (active) capacity += dailyLimitFor_(i.limit || st.dailyLimit, rampFor_(st, i), dayIdx);
     var state = !connected ? 'Not connected' : !active ? i.status : !running ? 'Not running' : 'Sending';
     r.inboxes.push({ email: i.email, state: state });
   });
@@ -3440,11 +3456,13 @@ function analyzeTeam_(d, prev, now, todayStart) {
   // Inboxes
   var ibv = d.inboxes || [[]];
   var ih = idx(ibv[0]);
-  var inboxes = 0, active = 0, redHealth = 0, highLimit = [];
+  var inboxes = 0, active = 0, redHealth = 0, highLimit = [], noWarm = [];
   for (var j = 1; j < ibv.length; j++) {
     if (!isValidEmail_(normEmail_(ibv[j][ih['Inbox Email']]))) continue;
     inboxes++;
     if (isActive_(ibv[j][ih['Status']])) active++;
+    if (ih['Warm-up Day 1'] !== undefined && String(ibv[j][ih['Warm-up Day 1']]) !== '' &&
+        Number(ibv[j][ih['Warm-up Day 1']]) === 0) noWarm.push(normEmail_(ibv[j][ih['Inbox Email']]));
     if (Number(ibv[j][ih['Daily Limit']]) > SAFE_LIMIT) highLimit.push(normEmail_(ibv[j][ih['Inbox Email']]) + ' (' + Number(ibv[j][ih['Daily Limit']]) + ')');
     if (String(ibv[j][ih['Health']] || '').indexOf('🔴') >= 0) redHealth++;
   }
@@ -3496,6 +3514,7 @@ function analyzeTeam_(d, prev, now, todayStart) {
   if (bouncePct > 0.03 && s.emailed >= 20) add('yellow', 'bounces', 'Bounce rate ' + (bouncePct * 100).toFixed(1) + '% (keep under 2%): lists not checked before upload?', 'Their Leads tab: filter Status = Bounced.');
   if (d.inboxes && inboxes === 0) add('yellow', 'noInbox', 'No Gmail connected yet', 'Their Inboxes tab.');
   else if (d.inboxes && active === 0) add('yellow', 'noActive', 'All Gmails are paused', 'Their Inboxes tab: Status column.');
+  if (noWarm.length) add('yellow', 'gmailWarm', 'Warm-up turned off for: ' + noWarm.join(', '), 'Their Inboxes tab: Warm-up Day 1 column.');
   if (highLimit.length) add('yellow', 'gmailLimit', 'Gmails with a daily limit above ' + SAFE_LIMIT + ': ' + highLimit.join(', '), 'Their Inboxes tab: Daily Limit column.');
   if (redHealth) add('yellow', 'health', redHealth + ' Gmail(s) paused for too many bounces', 'Their Inboxes tab: Health column.');
   var weekend = [0, 6].indexOf(now.getDay()) >= 0;
@@ -3663,9 +3682,23 @@ function inboxRows_(ss) {
     var email = normEmail_(r[ic['Inbox Email']]);
     if (!email) return;
     out.push({ row: i + 2, email: email, name: String(r[ic['Sender Name']] || '').trim(),
-               limit: Number(r[ic['Daily Limit']]) || 0, status: String(r[ic['Status']] || 'Active').trim() });
+               limit: Number(r[ic['Daily Limit']]) || 0, status: String(r[ic['Status']] || 'Active').trim(),
+               rampStart: optNum_(r[ic['Warm-up Day 1']]), rampStep: optNum_(r[ic['Warm-up Per Day']]) });
   });
   return out;
+}
+
+// A number typed in a cell, or null when the cell is empty (or the column does not exist).
+function optNum_(v) {
+  if (v === '' || v === null || v === undefined) return null;
+  var n = Number(v);
+  return isNaN(n) ? null : n;
+}
+
+// The warm-up for one Gmail: its own Warm-up columns on Inboxes, or else the Settings warm-up.
+function rampFor_(st, inbox) {
+  return { rampStart: inbox && inbox.rampStart !== null && inbox.rampStart !== undefined ? inbox.rampStart : st.rampStart,
+           rampStep: inbox && inbox.rampStep !== null && inbox.rampStep !== undefined ? inbox.rampStep : st.rampStep };
 }
 
 function isActive_(status) {

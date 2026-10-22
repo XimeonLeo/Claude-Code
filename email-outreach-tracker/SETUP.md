@@ -149,7 +149,7 @@ and repairs the tabs. Leads, sends, replies, Gmails and Do Not Contact are never
 |---|---|---|
 | **Dashboard** | Progress to goal, bounce rate, reply rate, results by email style | No |
 | **Leads** | One row per person: messages, status, Gmail, dates, replies | Only **Outcome** and **Notes** |
-| **Inboxes** | One row per Gmail: sent today, health 🟢🟡🔴, **Last Result** | Status and Daily Limit |
+| **Inboxes** | One row per Gmail: sent today, health 🟢🟡🔴, **Last Result** | Status, Daily Limit, Warm-up Day 1, Warm-up Per Day |
 | **Settings** | All the controls | Column B only |
 | **Log** | Every send, reply, bounce and error | No |
 | **Do Not Contact** | Bounced and opted-out people. Never emailed again | Add people who ask by other means |
@@ -166,7 +166,7 @@ Status back to New (or In sequence for a follow-up). Other leads keep sending in
 | Goal | 5000 | Target on the Dashboard |
 | Campaign start date / length | today / 11 | For "days left" |
 | Default daily limit per inbox | 35 | Most emails per Gmail per day, **1 to 500**. 35 or less is safest for a free Gmail. To give **one Gmail its own limit**, type it in its **Daily Limit** cell on the Inboxes tab (blank = this default) |
-| Warm-up: day 1 limit / increase | 20 / 5 | New Gmails start at 20 a day, +5 a day |
+| Warm-up: day 1 limit / increase | 20 / 5 | New Gmails start at 20 a day, +5 a day. To give **one Gmail its own warm-up**, fill its **Warm-up Day 1** and **Warm-up Per Day** cells on the Inboxes tab (blank = this default, 0 on day 1 = no warm-up for that Gmail) |
 | Days before follow-up 1 / 2 | 3 / 4 | Follow-ups go in the same email thread |
 | Send window | 8 to 18 | Sending hours, in the sheet's time zone |
 | Sending pace | Steady | **Steady** spreads each Gmail's emails across the send window (safest). **Fast** sends each Gmail's daily limit as soon as it can, usually within 1 to 2 hours |
@@ -314,7 +314,7 @@ The history is stored in **your** sheet, so they can't change it.
 - 🔴 Leads, Log rows or Do Not Contact rows deleted. Total sent going down. A tab, column or Settings row deleted or renamed.
 - 🔴 The Leads tab and the Log don't agree (one of them was edited or cleared).
 - 🔴 You can't open their sheet any more (they removed your access).
-- 🟡 Daily limit above 35 (in Settings, or for a Gmail on Inboxes), warm-up off, opt-out line removed, follow-ups off, sending paused.
+- 🟡 Daily limit above 35 (in Settings, or for a Gmail on Inboxes), warm-up off (in Settings, or for a Gmail), opt-out line removed, follow-ups off, sending paused.
 - 🟡 Leads set back to New after being emailed, leads marked Replied by hand, duplicate leads.
 - 🟡 High bounce rate, Gmails paused, nothing sent in 24 hours, no leads waiting.
 

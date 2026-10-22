@@ -2,6 +2,14 @@
 
 Every version of the outreach tracker, newest first. The same list is in the sheet: **📧 Outreach → What's new**.
 
+## v37 · 2026-10-22 · Choose your own warm-up
+
+- **New:** Each Gmail can have its own warm-up: how many on day 1, and how many more each day. Blank = the Settings warm-up. 0 on day 1 = no warm-up for that Gmail. _Where: Inboxes tab → Warm-up Day 1 and Warm-up Per Day columns (far right). Click "Apply the update to this sheet" below to add them_
+- **Changed:** The Settings warm-up accepts 0 to 500 on day 1 (it was 0 to 50). _Where: Settings → Warm-up: day 1 limit_
+- **Changed:** Admin: Gmails with their warm-up turned off are flagged 🟡. _Where: Team tab (admin)_
+
+After this update, click **📧 Outreach → 1. Set up / repair this sheet** (or **Apply the update to this sheet** in What's new).
+
 ## v36 · 2026-10-22 · Choose your own daily limit
 
 - **Changed:** The daily limit can now be anything from 1 to 500 (it was 1 to 50). 35 or less is still safest for a free Gmail. _Where: Settings → Default daily limit per inbox_
