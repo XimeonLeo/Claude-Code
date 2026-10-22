@@ -2,6 +2,14 @@
 
 Every version of the outreach tracker, newest first. The same list is in the sheet: **📧 Outreach → What's new**.
 
+## v38 · 2026-10-22 · Simpler 24-hour report, update prompt, choose who is on the Leaderboard
+
+- **Changed:** The 24-hour report is simpler and counts DELIVERED emails (sent, minus bounces), not just sent. One table: last 24 hours next to so far, for delivered (first emails and follow-ups), replies and bounces. The daily standard is checked against delivered. _Where: Outreach → My last 24 hours (report)_
+- **New:** When an update is ready, everyone is told: a yellow banner across the top of the Dashboard, a notice when the sheet opens, and "🆕 Update ready" at the top of the menu, until they click Apply the update. _Where: Dashboard banner and Outreach → 🆕 Update ready_
+- **New:** Admin: choose who shows on the Leaderboard with a tick box per person. Unticked people are still checked and alerted. _Where: Team tab → On Leaderboard column, then Outreach → Admin → Check all team sheets now_
+
+After this update, click **📧 Outreach → 1. Set up / repair this sheet** (or **Apply the update to this sheet** in What's new).
+
 ## v37 · 2026-10-22 · Choose your own warm-up
 
 - **New:** Each Gmail can have its own warm-up: how many on day 1, and how many more each day. Blank = the Settings warm-up. 0 on day 1 = no warm-up for that Gmail. _Where: Inboxes tab → Warm-up Day 1 and Warm-up Per Day columns (far right). Click "Apply the update to this sheet" below to add them_

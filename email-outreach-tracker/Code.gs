@@ -35,8 +35,8 @@ if (typeof OUTREACH_CONFIG === 'object' && OUTREACH_CONFIG) {
 
 // Change both every time you publish a new version, and add what changed to CHANGELOG (further down).
 // People see the version in Outreach -> Which Gmail am I using?, and the changes in Outreach -> What's new.
-var CORE_BUILD = 37;
-var CORE_VERSION = 'v37';
+var CORE_BUILD = 38;
+var CORE_VERSION = 'v38';
 
 // Daily limits: anything from 1 up to Gmail's own cap. Above SAFE_LIMIT a free Gmail is more likely to be
 // flagged, so the sheet warns but allows it.
@@ -140,14 +140,20 @@ function onOpen() {
   // After an update: a notice in the corner and a highlighted first menu item, until the person opens
   // What's new. (Google does not let a window open by itself when the sheet opens.)
   var fresh = seenBuild_() < CORE_BUILD;
-  if (fresh) {
-    try {
+  var apply = false;
+  try { apply = needsApply_(SpreadsheetApp.getActiveSpreadsheet()); } catch (e) { /* not essential */ }
+  try {
+    if (apply) {
+      SpreadsheetApp.getActiveSpreadsheet().toast('A new version (' + CORE_VERSION + ') is ready for this sheet. Click 📧 Outreach → ' +
+        '🆕 Update ready, then "Apply the update". It takes about 30 seconds and keeps all your leads.', '🆕 Update ready', 60);
+    } else if (fresh) {
       SpreadsheetApp.getActiveSpreadsheet().toast('Outreach was updated to ' + CORE_VERSION +
         '. Click 📧 Outreach → 🆕 What\'s new to see what changed and where to find it.', '🆕 Outreach updated', 30);
-    } catch (e) { /* the menu item still shows it */ }
-  }
+    }
+  } catch (e) { /* the menu item still shows it */ }
   SpreadsheetApp.getUi().createMenu('📧 Outreach')
-    .addItem(fresh ? '🆕 What\'s new in ' + CORE_VERSION + ' (click to see)' : 'What\'s new / changelog', 'slot9')
+    .addItem(apply ? '🆕 Update ready: click here to apply ' + CORE_VERSION
+      : fresh ? '🆕 What\'s new in ' + CORE_VERSION + ' (click to see)' : 'What\'s new / changelog', 'slot9')
     .addSeparator()
     .addItem('1. Set up / repair this sheet', 'setupSheet')
     .addItem('Reset to default settings (keeps your leads)', 'slot3')
@@ -303,6 +309,7 @@ function setupSheet() {
   ss.setActiveSheet(ss.getSheetByName(SHEET.DASH));
   try { addGuards_(ss); } catch (e) { console.log('Guards: ' + e.message); }
 
+  setSheetBuild_(ss);
   toast_('Sheet is ready. Next: check Settings, connect your Gmails, then import leads.');
 }
 
@@ -2042,6 +2049,7 @@ function runForInbox_(forceCheck) {
     if (!inbox) return me + ' is not on the Inboxes tab. Use "Connect THIS Gmail" first.';
     var now = new Date();
     setInboxCell_(ss, inbox.row, 'Last Run', now);
+    try { updateBanner_(ss); } catch (e) { /* the menu still shows the update */ }
     var scan = logScan_(ss, me, now);
     var notes = [];
     var resumed = function () { scan.lastResume = now; scan.recentSent = 0; scan.recentBounces = 0; };
@@ -2532,6 +2540,11 @@ function encodeHeader_(s) {
 // Each item: [kind, what changed, where to find it]. kind: New, Improved, Fixed, Changed or Removed.
 // repair: true = people should click "Apply the update to this sheet" (runs Set up / repair).
 var CHANGELOG = [
+  { v: 38, date: '2026-10-22', title: 'Simpler 24-hour report, update prompt, choose who is on the Leaderboard', repair: true, items: [
+    ['Changed', 'The 24-hour report is simpler and counts DELIVERED emails (sent, minus bounces), not just sent. One table: last 24 hours next to so far, for delivered (first emails and follow-ups), replies and bounces. The daily standard is checked against delivered.', 'Outreach -> My last 24 hours (report)'],
+    ['New', 'When an update is ready, everyone is told: a yellow banner across the top of the Dashboard, a notice when the sheet opens, and "🆕 Update ready" at the top of the menu, until they click Apply the update.', 'Dashboard banner and Outreach -> 🆕 Update ready'],
+    ['New', 'Admin: choose who shows on the Leaderboard with a tick box per person. Unticked people are still checked and alerted.', 'Team tab -> On Leaderboard column, then Outreach -> Admin -> Check all team sheets now']
+  ] },
   { v: 37, date: '2026-10-22', title: 'Choose your own warm-up', repair: true, items: [
     ['New', 'Each Gmail can have its own warm-up: how many on day 1, and how many more each day. Blank = the Settings warm-up. 0 on day 1 = no warm-up for that Gmail.', 'Inboxes tab -> Warm-up Day 1 and Warm-up Per Day columns (far right). Click "Apply the update to this sheet" below to add them'],
     ['Changed', 'The Settings warm-up accepts 0 to 500 on day 1 (it was 0 to 50).', 'Settings -> Warm-up: day 1 limit'],
@@ -2682,11 +2695,48 @@ function slot9(action) {
   loadTheme_(ss);
   var seen = seenBuild_();
   try { PropertiesService.getUserProperties().setProperty('SEEN_BUILD', String(CORE_BUILD)); } catch (e) { /* not essential */ }
-  var html = HtmlService.createHtmlOutput(changelogHtml_(THEME, seen)).setWidth(820).setHeight(680);
+  var html = HtmlService.createHtmlOutput(changelogHtml_(THEME, seen, needsApply_(ss))).setWidth(820).setHeight(680);
   SpreadsheetApp.getUi().showModalDialog(html, 'What\'s new in Outreach ' + CORE_VERSION);
 }
 
 // The last version this person has seen in the What's new window (0 = never opened it).
+// Which version last set up this sheet (Set up / repair or "Apply the update"). Kept on the spreadsheet,
+// so every Gmail's script copy sees it. 0 = set up by a version from before this was recorded.
+var BUILD_KEY = 'outreachSheetBuild';
+
+function sheetBuild_(ss) {
+  var m = ss.createDeveloperMetadataFinder().withKey(BUILD_KEY).find();
+  return m.length ? Number(m[0].getValue()) || 0 : 0;
+}
+
+function setSheetBuild_(ss) {
+  try {
+    ss.createDeveloperMetadataFinder().withKey(BUILD_KEY).find().forEach(function (m) { m.remove(); });
+    ss.addDeveloperMetadata(BUILD_KEY, String(CORE_BUILD));
+  } catch (e) { console.log('Could not record the version: ' + e.message); }
+}
+
+// True when an update since this sheet was last set up changes the sheet itself.
+function needsApply_(ss) {
+  var b = sheetBuild_(ss);
+  return CHANGELOG.some(function (c) { return c.v > b && c.v <= CORE_BUILD && c.repair; });
+}
+
+// A banner across the top of the Dashboard while an update waits to be applied. Every Gmail's run checks it,
+// so it shows within 15 minutes of the new code arriving. Applying the update rebuilds the Dashboard without it.
+var BANNER_TEXT = '🆕  UPDATE READY: click  📧 Outreach  →  🆕 Update ready  →  Apply the update  (30 seconds, keeps all your leads)';
+
+function updateBanner_(ss) {
+  var d = ss.getSheetByName(SHEET.DASH);
+  if (!d || !needsApply_(ss)) return;
+  var cell = d.getRange('B1');
+  if (String(cell.getValue()).indexOf('UPDATE READY') >= 0) return;
+  d.setRowHeight(1, 36);
+  d.getRange('B1:P1').merge().setValue(BANNER_TEXT.replace('READY:', 'READY (' + CORE_VERSION + '):'))
+    .setBackground('#E8C766').setFontColor('#0B1530').setFontWeight('bold').setFontSize(12)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+}
+
 function seenBuild_() {
   try { return Number(PropertiesService.getUserProperties().getProperty('SEEN_BUILD') || 0); } catch (e) { return CORE_BUILD; }
 }
@@ -2700,10 +2750,9 @@ function applyUpdate_() {
   return 'Done. This sheet now has everything from ' + CORE_VERSION + '.';
 }
 
-function changelogHtml_(T, seen) {
+function changelogHtml_(T, seen, needRepair) {
   var fresh = CHANGELOG.filter(function (c) { return c.v > seen && c.v <= CORE_BUILD; });
   if (!fresh.length) fresh = CHANGELOG.slice(0, 1);
-  var needRepair = fresh.some(function (c) { return c.repair; });
   var colour = { New: T.good, Improved: T.navy2, Fixed: '#B26A00', Changed: T.muted, Removed: T.bad };
   var esc = function (s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
   var block = function (c) {
@@ -2726,8 +2775,8 @@ function changelogHtml_(T, seen) {
     'details{margin:14px 0 20px}summary{cursor:pointer;font-weight:bold;color:' + T.strong + ';padding:6px 0}#msg{margin-left:10px;font-size:12px}</style>' +
     '<div class="band"><b>You\'re on Outreach ' + esc(CORE_VERSION) + '</b><div>' +
     (seen && seen < CORE_BUILD ? 'Changes since you last looked (v' + seen + ')' : 'Latest changes') + '</div></div>' +
-    (needRepair ? '<div class="fix"><b>One step for this sheet:</b> some of these changes need the sheet itself updated ' +
-      '(new Settings rows, Dashboard). It keeps all your leads and results.<br>' +
+    (needRepair ? '<div class="fix"><b>🆕 Update ready for this sheet.</b> Click the button to get the new Dashboard, ' +
+      'Settings and columns. It takes about 30 seconds and keeps all your leads and results.<br>' +
       '<button class="btn" id="go" onclick="go()">Apply the update to this sheet</button><span id="msg"></span></div>' : '') +
     fresh.map(block).join('') +
     '<details><summary>Full history: every version since the start (' + CHANGELOG.length + ')</summary>' +
@@ -2863,38 +2912,43 @@ function slot7() {
   var ss = ss_();
   loadTheme_(ss);
   var r = reportData_(ss, new Date());
-  var html = HtmlService.createHtmlOutput(reportHtml_(THEME, r)).setWidth(760).setHeight(720);
+  var html = HtmlService.createHtmlOutput(reportHtml_(THEME, r)).setWidth(700).setHeight(700);
   SpreadsheetApp.getUi().showModalDialog(html, 'My last 24 hours');
 }
 
 // Works everything out from the raw Log, Leads and Inboxes tabs (not the Dashboard).
+// Delivered = sent, not counting emails to people whose email bounced.
 function reportData_(ss, now) {
   var DAY = 86400000, since = new Date(now.getTime() - DAY);
   var tz = ss.getSpreadsheetTimeZone();
   var st = readSettings_(ss);
   var fmt = function (d, f) { return Utilities.formatDate(d, tz, f); };
+  var zero = function () { return { delivered: 0, first: 0, fu: 0, replies: 0, bounces: 0, sent: 0 }; };
   var r = { campaign: st.name, by: me_(), made: fmt(now, 'EEE d MMM yyyy, HH:mm'), from: fmt(since, 'EEE d MMM, HH:mm'),
-            sent24: 0, first24: 0, fu24: 0, replies24: 0, bounces24: 0, sentAll: 0, repliesAll: 0, bouncesAll: 0,
-            leads: 0, waiting: 0, imported24: 0, needOutcome: 0, followUp: 0, interested: 0, meetings: 0,
-            fuAll: 0, fuDue: 0, fuOverdue: 0, fuReplies24: 0, fuRepliesAll: 0, inSeq: 0,
+            day: zero(), all: zero(), leads: 0, waiting: 0, needOutcome: 0, followUp: 0, fuDue: 0, fuOverdue: 0,
             inboxes: [], problems: [] };
   var tomorrow = new Date(startOfToday_(ss).getTime() + DAY);
 
   var lg = ss.getSheetByName(SHEET.LOG);
-  if (lg.getLastRow() > 1) {
-    lg.getRange(2, 1, lg.getLastRow() - 1, 4).getValues().forEach(function (x) {
-      var ev = String(x[3]), recent = x[0] instanceof Date && x[0] >= since;
+  var log = lg.getLastRow() > 1 ? lg.getRange(2, 1, lg.getLastRow() - 1, 5).getValues() : [];
+  var bounced = {};
+  log.forEach(function (x) { if (String(x[3]) === 'BOUNCE' && x[4] !== '') bounced[String(x[4])] = true; });
+  log.forEach(function (x) {
+    var ev = String(x[3]);
+    var bucks = x[0] instanceof Date && x[0] >= since ? [r.all, r.day] : [r.all];
+    bucks.forEach(function (b) {
       if (ev.indexOf('SENT') === 0) {
-        r.sentAll++;
-        if (ev !== 'SENT_1') r.fuAll++;
-        if (recent) { r.sent24++; if (ev === 'SENT_1') r.first24++; else r.fu24++; }
+        b.sent++;
+        if (bounced[String(x[4])]) return;
+        b.delivered++;
+        if (ev === 'SENT_1') b.first++; else b.fu++;
       } else if (ev === 'REPLY' || ev === 'UNSUB') {
-        r.repliesAll++; if (recent) r.replies24++;
+        b.replies++;
       } else if (ev === 'BOUNCE') {
-        r.bouncesAll++; if (recent) r.bounces24++;
+        b.bounces++;
       }
     });
-  }
+  });
 
   var ld = ss.getSheetByName(SHEET.LEADS);
   var lc = colMap_(ld);
@@ -2905,24 +2959,13 @@ function reportData_(ss, now) {
       var status = String(x[lc['Status']] || '').trim();
       if (status === STATUS.NEW) r.waiting++;
       if (status === STATUS.ACTIVE) {
-        r.inSeq++;
         var next = x[lc['Next Send']];
         if (next instanceof Date && next < tomorrow) r.fuDue++;
         if (next instanceof Date && now - next > DAY) r.fuOverdue++;
       }
-      var rep = x[lc['Replied At']], fu1 = x[lc['Follow-up 1 Sent']];
-      if (rep instanceof Date && fu1 instanceof Date && rep > fu1) {
-        r.fuRepliesAll++;
-        if (rep >= since) r.fuReplies24++;
-      }
-      var imp = x[lc['Imported At']];
-      if (imp instanceof Date && imp >= since) r.imported24++;
       var c = replyCategory_(x, lc);
       if (c === 'need') r.needOutcome++;
       if (c === 'follow') r.followUp++;
-      var oc = String(x[lc['Outcome']] || '').trim();
-      if (oc === 'Interested') r.interested++;
-      if (oc === 'Meeting booked' || oc === 'Customer') r.meetings++;
     });
   }
 
@@ -2942,123 +2985,100 @@ function reportData_(ss, now) {
     var state = !connected ? 'Not connected' : !active ? i.status : !running ? 'Not running' : 'Sending';
     r.inboxes.push({ email: i.email, state: state });
   });
-  r.connected = r.inboxes.filter(function (i) { return i.state !== 'Not connected'; }).length;
-  r.activeInboxes = r.inboxes.filter(function (i) { return i.state === 'Sending'; }).length;
+  r.sending = r.inboxes.filter(function (i) { return i.state === 'Sending'; }).length;
   r.standard = st.standard > 0 ? st.standard : capacity;
-  r.met = r.standard > 0 && r.sent24 >= r.standard;
+  r.met = r.standard > 0 && r.day.delivered >= r.standard;
+  r.goal = st.goal;
+  r.progress = r.goal ? Math.min(1, r.all.delivered / r.goal) : 0;
+  r.daysLeft = Math.max(0, Math.round((st.start.getTime() + st.length * DAY - now.getTime()) / DAY));
+  r.perDay = r.daysLeft ? Math.ceil(Math.max(0, r.goal - r.all.delivered) / r.daysLeft) : Math.max(0, r.goal - r.all.delivered);
 
-  if (r.fuOverdue) r.problems.push(r.fuOverdue + ' follow-up(s) more than a day late: the Gmail that sent their first email may have stopped (Inboxes -> Last Run, Last Result).');
-  // Why it fell short (only shown when it did)
+  // What to check (always), and why the standard was missed (only when it was)
+  if (r.fuOverdue) r.problems.push(r.fuOverdue + ' follow-up(s) more than a day late: the Gmail that sent the first email may have stopped.');
+  r.inboxes.forEach(function (i) { if (i.state !== 'Sending') r.problems.push(i.email + ': ' + i.state + '.'); });
   if (!r.met) {
     if (st.paused) r.problems.push('Sending is paused (Settings -> Pause everything).');
     if (!r.waiting) r.problems.push('No new leads waiting: upload more leads.');
-    else if (r.waiting < r.standard) r.problems.push('Only ' + r.waiting + ' new leads waiting: not enough for a full day (' + r.standard + ').');
+    else if (r.waiting < r.standard) r.problems.push('Only ' + r.waiting + ' new leads waiting, not enough for a full day (' + r.standard + ').');
     if (!r.inboxes.length) r.problems.push('No Gmail connected.');
-    r.inboxes.forEach(function (i) { if (i.state !== 'Sending') r.problems.push(i.email + ': ' + i.state + '.'); });
-    if (r.problems.length === (r.fuOverdue ? 1 : 0)) r.problems.push('Gmails and leads look fine: it may still be catching up (warm-up, send window, or follow-ups not due).');
+    if (r.day.bounces) r.problems.push(r.day.bounces + ' email(s) bounced, so they don\'t count as delivered.');
+    if (!r.problems.length) r.problems.push('Gmails and leads look fine: it may still be catching up (warm-up, send window, or follow-ups not due).');
   }
-
-  // Goal
-  r.goal = st.goal;
-  r.delivered = Math.max(0, r.sentAll - r.bouncesAll);
-  r.progress = r.goal ? Math.min(1, r.delivered / r.goal) : 0;
-  var daysLeft = Math.max(0, Math.round((st.start.getTime() + st.length * DAY - now.getTime()) / DAY));
-  r.daysLeft = daysLeft;
-  r.perDay = daysLeft ? Math.ceil(Math.max(0, r.goal - r.delivered) / daysLeft) : Math.max(0, r.goal - r.delivered);
-  r.bounce24 = r.sent24 ? r.bounces24 / r.sent24 : 0;
-  r.bounceAll = r.sentAll ? r.bouncesAll / r.sentAll : 0;
   return r;
 }
 
 // The report as plain text, to paste into WhatsApp or an email.
 function reportText_(r) {
-  var p = function (x) { return (100 * x).toFixed(1) + '%'; };
+  var p = function (n, of) { return of ? ' (' + (100 * n / of).toFixed(1) + '%)' : ''; };
+  var both = function (label, a, b) { return '• ' + label + ': ' + a + ' | ' + b; };
   var lines = [
-    '📊 ' + r.campaign + ': last 24 hours',
-    r.from + ' → ' + r.made,
+    '📊 ' + r.campaign,
+    'Made ' + r.made,
     '',
-    'LAST 24 HOURS',
-    '• Sent: ' + r.sent24 + ' (' + r.first24 + ' first emails, ' + r.fu24 + ' follow-ups)',
-    '• Daily standard: ' + r.standard + ' → ' + (r.met ? '✅ met' : '❌ not met (' + (r.standard - r.sent24) + ' short)'),
-    '• Replies: ' + r.replies24,
-    '• Bounces: ' + r.bounces24 + ' (' + p(r.bounce24) + ')',
-    '• New leads uploaded: ' + r.imported24,
-    '• New leads waiting: ' + r.waiting
-  ];
-  lines = lines.concat(['', 'FOLLOW-UPS',
-    '• Sent in 24 hours: ' + r.fu24 + ' (all time: ' + r.fuAll + ')',
-    '• Due today: ' + r.fuDue + '   · Overdue: ' + r.fuOverdue,
-    '• Replies after a follow-up: ' + r.fuReplies24 + ' in 24 hours (' + r.fuRepliesAll + ' all time)',
-    '• Waiting for a follow-up: ' + r.inSeq]);
-  if (r.problems.length) lines = lines.concat(['', r.met ? 'TO CHECK' : 'WHY IT FELL SHORT']).concat(r.problems.map(function (x) { return '• ' + x; }));
-  return lines.concat([
+    '            LAST 24 HOURS | SO FAR',
+    both('Delivered', r.day.delivered, r.all.delivered),
+    both('  first emails', r.day.first, r.all.first),
+    both('  follow-ups', r.day.fu, r.all.fu),
+    both('Replies', r.day.replies, r.all.replies),
+    both('Bounces', r.day.bounces + p(r.day.bounces, r.day.sent), r.all.bounces + p(r.all.bounces, r.all.sent)),
     '',
-    'CAMPAIGN SO FAR',
-    '• Goal: ' + r.delivered + ' of ' + r.goal + ' delivered (' + p(r.progress) + ')' +
+    'Daily standard: ' + r.day.delivered + ' of ' + r.standard + ' delivered ' + (r.met ? '✅' : '❌ (' + (r.standard - r.day.delivered) + ' short)'),
+    'Goal: ' + r.all.delivered + ' of ' + r.goal + ' delivered (' + Math.round(100 * r.progress) + '%)' +
       (r.daysLeft ? ', ' + r.daysLeft + ' days left, ' + r.perDay + ' a day needed' : ''),
-    '• Total sent: ' + r.sentAll,
-    '• Total replies: ' + r.repliesAll,
-    '• Total bounces: ' + r.bouncesAll + ' (' + p(r.bounceAll) + ')',
-    '• Gmails: ' + r.connected + ' connected, ' + r.activeInboxes + ' sending',
-    '• Replies needing an outcome: ' + r.needOutcome,
-    '• To follow up: ' + r.followUp + '   · Interested: ' + r.interested + '   · Meetings: ' + r.meetings
-  ]).join('\n');
+    '',
+    'RIGHT NOW: ' + r.waiting + ' new leads waiting · ' + r.sending + ' of ' + r.inboxes.length + ' Gmails sending · ' +
+      r.needOutcome + ' replies need an outcome · ' + r.followUp + ' to follow up'
+  ];
+  if (r.problems.length) lines = lines.concat(['', r.met ? 'TO CHECK' : 'WHY IT FELL SHORT']).concat(r.problems.map(function (x) { return '• ' + x; }));
+  return lines.join('\n');
 }
 
 function reportHtml_(T, r) {
   var esc = function (s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
-  var p = function (x) { return (100 * x).toFixed(1) + '%'; };
-  var tile = function (label, value, sub, tone) {
-    return '<div class="tile' + (tone ? ' ' + tone : '') + '"><small>' + esc(label) + '</small><b>' + esc(value) + '</b>' +
-      (sub ? '<i>' + esc(sub) + '</i>' : '') + '</div>';
-  };
-  var bad = r.met ? '' : 'bad';
-  return '<style>body{font-family:Arial,sans-serif;margin:0;padding:0 10px;color:#1D2333}' +
+  var n = function (x) { return Number(x).toLocaleString('en-US'); };
+  var p = function (a, of) { return of ? ' <i>(' + (100 * a / of).toFixed(1) + '%)</i>' : ''; };
+  var row = function (label, a, b, cls) { return '<tr class="' + (cls || '') + '"><th>' + label + '</th><td>' + a + '</td><td>' + b + '</td></tr>'; };
+  var chip = function (label, v, bad) { return '<div class="chip' + (bad ? ' bad' : '') + '"><b>' + n(v) + '</b>' + esc(label) + '</div>'; };
+  return '<style>body{font-family:Arial,sans-serif;margin:0;padding:0 12px;color:#1D2333}' +
     '.band{background:' + T.navy + ';color:' + T.onNavy + ';border-bottom:3px solid ' + T.gold + ';padding:12px 16px;border-radius:6px}' +
     '.band b{font-size:18px}.band div{color:' + T.gold2 + ';font-size:12px;margin-top:3px}' +
-    'h3{margin:16px 0 6px;font-size:13px;letter-spacing:.06em;color:' + T.strong + ';border-bottom:2px solid ' + T.gold + ';padding-bottom:4px}' +
-    '.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}' +
-    '.tile{background:#fff;border:1px solid ' + T.line + ';border-top:3px solid ' + T.gold + ';border-radius:6px;padding:8px;text-align:center}' +
-    '.tile small{display:block;font-size:10px;font-weight:bold;color:' + T.muted + ';text-transform:uppercase}' +
-    '.tile b{display:block;font-size:28px;color:' + T.strong + ';margin:2px 0}.tile i{font-style:normal;font-size:11px;color:#666}' +
-    '.tile.good{border-top-color:' + T.good + '}.tile.good b{color:' + T.good + '}.tile.bad{border-top-color:' + T.bad + '}.tile.bad b{color:' + T.bad + '}' +
-    '.why{background:#FCEDEB;border-left:4px solid ' + T.bad + ';padding:8px 12px;border-radius:4px;font-size:13px;margin-top:8px}.why li{margin:3px 0}' +
-    '.track{height:12px;background:' + T.track + ';border-radius:6px;overflow:hidden;margin:6px 0 2px}.track i{display:block;height:100%;background:' + T.gold + '}' +
+    'table{width:100%;border-collapse:collapse;margin-top:12px;font-size:15px}' +
+    'thead td{font-size:11px;font-weight:bold;letter-spacing:.06em;color:' + T.muted + ';text-align:center;padding:6px;border-bottom:2px solid ' + T.gold + '}' +
+    'th{text-align:left;font-weight:normal;padding:9px 8px;border-bottom:1px solid ' + T.line + '}' +
+    'td{text-align:center;font-weight:bold;font-size:20px;color:' + T.strong + ';padding:9px 8px;border-bottom:1px solid ' + T.line + ';width:30%}' +
+    'td i{font-style:normal;font-size:12px;color:#888;font-weight:normal}' +
+    'tr.big th{font-weight:bold;font-size:16px}tr.big td{font-size:34px;background:' + T.ivory + '}' +
+    'tr.sub th{padding-left:26px;color:#666;font-size:13px}tr.sub td{font-size:15px;color:#555}' +
+    '.ok{color:' + T.good + '}.no{color:' + T.bad + '}' +
+    '.goal{margin-top:14px;font-size:14px}.track{height:12px;background:' + T.track + ';border-radius:6px;overflow:hidden;margin:6px 0}.track i{display:block;height:100%;background:' + T.gold + '}' +
+    '.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.chip{border:1px solid ' + T.line + ';border-radius:6px;padding:6px 10px;font-size:12px;background:#fff}' +
+    '.chip b{font-size:16px;margin-right:6px;color:' + T.strong + '}.chip.bad{border-color:' + T.bad + '}.chip.bad b{color:' + T.bad + '}' +
+    '.why{background:#FCEDEB;border-left:4px solid ' + T.bad + ';padding:8px 12px;border-radius:4px;font-size:13px;margin-top:12px}.why li{margin:3px 0}' +
     '.btn{background:' + T.navy + ';color:' + T.onNavy + ';border:2px solid ' + T.gold + ';border-radius:4px;padding:9px 18px;font-weight:bold;cursor:pointer}' +
     'textarea{position:absolute;left:-9999px}#msg{margin-left:10px;color:' + T.good + ';font-size:12px}</style>' +
-    '<div class="band"><b>📊 ' + esc(r.campaign) + '</b><div>Last 24 hours: ' + esc(r.from) + ' → ' + esc(r.made) + '   ·   ' + esc(r.by) + '</div></div>' +
-    '<h3>LAST 24 HOURS</h3><div class="grid">' +
-    tile('Sent', r.sent24, r.first24 + ' first · ' + r.fu24 + ' follow-ups', bad || 'good') +
-    tile('Daily standard', r.standard, r.met ? '✅ Met' : '❌ ' + (r.standard - r.sent24) + ' short', bad || 'good') +
-    tile('Replies', r.replies24, '') +
-    tile('Bounces', r.bounces24, p(r.bounce24) + ' of sent', r.bounce24 > 0.03 ? 'bad' : '') +
-    '</div><div class="grid" style="margin-top:8px">' +
-    tile('New leads waiting', r.waiting, 'on the ground now', !r.met && r.waiting < r.standard ? 'bad' : '') +
-    tile('Leads uploaded', r.imported24, 'in the last 24 hours') +
-    tile('Need an outcome', r.needOutcome, 'replies not marked yet', r.needOutcome ? 'bad' : '') +
-    tile('To follow up', r.followUp, r.interested + ' interested') +
-    '</div>' +
-    '<h3>FOLLOW-UPS</h3><div class="grid">' +
-    tile('Sent (24 hours)', r.fu24, 'all time: ' + r.fuAll) +
-    tile('Due today', r.fuDue, r.inSeq + ' waiting in total') +
-    tile('Overdue', r.fuOverdue, 'more than a day late', r.fuOverdue ? 'bad' : 'good') +
-    tile('Replies after a follow-up', r.fuReplies24, r.fuRepliesAll + ' all time') +
-    '</div>' +
-    (!r.problems.length ? '' : '<div class="why"><b>' + (r.met ? 'To check' : 'Why it fell short') + '</b><ul>' + r.problems.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>') +
-    '<h3>CAMPAIGN SO FAR</h3>' +
-    '<div style="font-size:13px"><b>Goal:</b> ' + r.delivered + ' of ' + r.goal + ' delivered (' + p(r.progress) + ')' +
-    (r.daysLeft ? ' · ' + r.daysLeft + ' days left · ' + r.perDay + ' a day needed' : '') + '</div>' +
-    '<div class="track"><i style="width:' + Math.round(100 * r.progress) + '%"></i></div>' +
-    '<div class="grid" style="margin-top:8px">' +
-    tile('Total sent', r.sentAll, '') +
-    tile('Total replies', r.repliesAll, r.meetings + ' meetings') +
-    tile('Total bounces', r.bouncesAll, p(r.bounceAll), r.bounceAll > 0.03 ? 'bad' : '') +
-    tile('Gmails', r.connected, r.activeInboxes + ' sending now', r.activeInboxes < r.connected ? 'bad' : '') +
-    '</div>' +
+    '<div class="band"><b>📊 ' + esc(r.campaign) + '</b><div>Made ' + esc(r.made) + '   ·   ' + esc(r.by) + '</div></div>' +
+    '<table><thead><tr><td></td><td>LAST 24 HOURS</td><td>SO FAR</td></tr></thead>' +
+    row('Delivered <i style="color:#888;font-size:11px">(sent, minus bounces)</i>', n(r.day.delivered), n(r.all.delivered), 'big') +
+    row('first emails', n(r.day.first), n(r.all.first), 'sub') +
+    row('follow-ups', n(r.day.fu), n(r.all.fu), 'sub') +
+    row('Replies', n(r.day.replies), n(r.all.replies)) +
+    row('Bounces', n(r.day.bounces) + p(r.day.bounces, r.day.sent), n(r.all.bounces) + p(r.all.bounces, r.all.sent)) +
+    row('Daily standard', '<span class="' + (r.met ? 'ok' : 'no') + '">' + (r.met ? '✅ ' : '❌ ') + n(r.day.delivered) + ' / ' + n(r.standard) + '</span>' +
+      (r.met ? '' : '<br><i>' + n(r.standard - r.day.delivered) + ' short</i>'), '') +
+    '</table>' +
+    '<div class="goal"><b>Goal:</b> ' + n(r.all.delivered) + ' of ' + n(r.goal) + ' delivered (' + Math.round(100 * r.progress) + '%)' +
+    (r.daysLeft ? ' · ' + r.daysLeft + ' days left · ' + n(r.perDay) + ' a day needed' : '') +
+    '<div class="track"><i style="width:' + Math.round(100 * r.progress) + '%"></i></div></div>' +
+    '<div class="chips">' + chip('new leads waiting', r.waiting, !r.met && r.waiting < r.standard) +
+    chip('of ' + r.inboxes.length + ' Gmails sending', r.sending, r.sending < r.inboxes.length) +
+    chip('replies need an outcome', r.needOutcome, r.needOutcome > 0) + chip('to follow up', r.followUp) +
+    chip('follow-ups late', r.fuOverdue, r.fuOverdue > 0) + '</div>' +
+    (!r.problems.length ? '' : '<div class="why"><b>' + (r.met ? 'To check' : 'Why it fell short') + '</b><ul>' +
+      r.problems.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>') +
     '<p style="margin-top:14px"><button class="btn" onclick="copy()">Copy as text (WhatsApp / email)</button><span id="msg"></span></p>' +
     '<textarea id="txt">' + esc(reportText_(r)) + '</textarea>' +
     '<script>function copy(){var t=document.getElementById("txt");t.select();var ok=false;try{ok=document.execCommand("copy");}catch(e){}' +
-    'if(!ok&&navigator.clipboard){navigator.clipboard.writeText(t.value).then(function(){m("Copied.");},function(){m("Select and copy: the text could not be copied automatically.");});return;}' +
+    'if(!ok&&navigator.clipboard){navigator.clipboard.writeText(t.value).then(function(){m("Copied.");},function(){m("Could not copy automatically.");});return;}' +
     'm(ok?"Copied. Paste it into WhatsApp or an email.":"Could not copy automatically.");}function m(s){document.getElementById("msg").textContent=s;}</script>';
 }
 
@@ -3101,7 +3121,7 @@ function boardIncludesMe_() {
 var TEAM = { OVERVIEW: 'Team', ALERTS: 'Team Alerts', HISTORY: 'Team History' };
 var TEAM_HEADERS = ['Name', 'Sheet link', 'Status', 'Problems now', 'Red alerts (7 days)',
   'Sent today', 'Sent (7 days)', 'Total sent', 'Bounce %', 'Replies', 'Reply %', 'Meetings',
-  'Leads waiting', 'Active Gmails', 'Last email sent', 'Last checked', 'Their dashboard'];
+  'Leads waiting', 'Active Gmails', 'Last email sent', 'Last checked', 'Their dashboard', 'On Leaderboard'];
 var TEAM_ALERT_HEADERS = ['Found At', 'Name', 'Level', 'What happened', 'How to check', 'Sheet ID'];
 var TEAM_HISTORY_HEADERS = ['Checked At', 'Name', 'Leads', 'Waiting', 'Total Sent', 'Log Rows',
   'Log Sends', 'Replies', 'Bounced', 'Do Not Contact', 'Status', 'Sheet ID', 'Snapshot'];
@@ -3167,6 +3187,20 @@ function teamSetup_(ss) {
     sh.setFrozenColumns(1);
     styleDataTab_(sh, { hideGrid: true });
   }
+  // Tick or untick who shows on the Leaderboard. New rows start ticked.
+  var tc = colMap_(sh);
+  if (tc['On Leaderboard'] !== undefined) {
+    var col = tc['On Leaderboard'] + 1, last = Math.max(2, lastFilledRow_(sh, 2));
+    sh.getRange(2, col, Math.max(1, sh.getMaxRows() - 1), 1).setDataValidation(
+      SpreadsheetApp.newDataValidation().requireCheckbox().build());
+    var on = sh.getRange(2, col, last - 1, 1).getValues();
+    var links = sh.getRange(2, 2, last - 1, 1).getValues();
+    var changed = false;
+    on.forEach(function (v, i) { if (String(links[i][0]).trim() && v[0] === '') { v[0] = true; changed = true; } });
+    if (changed) sh.getRange(2, col, last - 1, 1).setValues(on);
+    sh.getRange(1, col).setNote('Untick to leave this person off the Leaderboard (they are still checked and alerted). ' +
+      'Then click Outreach -> Admin -> Check all team sheets now.');
+  }
   ensureSheet_(ss, TEAM.ALERTS, TEAM_ALERT_HEADERS).setColumnWidth(4, 420);
   ensureSheet_(ss, TEAM.HISTORY, TEAM_HISTORY_HEADERS);
   // Only the owner of this sheet can change the alert history, even if others can edit the sheet.
@@ -3222,7 +3256,8 @@ function refreshTeam_() {
       if (known.indexOf(f.key) < 0) alertRows.push([now, name, f.level === 'red' ? '🔴 Red' : '🟡 Check', f.text, f.how || '', id]);
     });
     var status = teamStatus_(res.flags);
-    if (res.stats) board.push({ name: name || '(no name)', stats: res.stats, status: status });
+    var shown = tc['On Leaderboard'] === undefined || r[tc['On Leaderboard']] !== false;
+    if (res.stats && shown) board.push({ name: name || '(no name)', stats: res.stats, status: status });
     counts[status === '🟢 OK' ? 'ok' : status === '🟡 Check' ? 'check' : 'problem']++;
     var set = function (h, v) { if (tc[h] !== undefined) r[tc[h]] = v; };
     set('Status', status);

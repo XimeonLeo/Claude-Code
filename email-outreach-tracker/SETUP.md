@@ -38,6 +38,12 @@ everything: who got which email, from which Gmail, follow-ups, replies and bounc
 
 If an update can't be downloaded or has a mistake in it, every sheet keeps running the version it already has.
 
+**Everyone is prompted to apply it.** Within about an hour of you uploading the new version, every sheet shows a
+yellow **UPDATE READY** banner across the top of the Dashboard, a notice when the sheet opens, and
+**🆕 Update ready: click here to apply** at the top of the 📧 Outreach menu. These stay until someone in that sheet
+clicks **Apply the update** (30 seconds, keeps all leads). Google doesn't let the window open by itself, so this is
+as close to a pop-up as a sheet allows.
+
 **What people see after an update:** a notice in the corner of the sheet ("Outreach updated") and a highlighted
 first menu item, **📧 Outreach → 🆕 What's new in v35**. It shows what's new, improved, fixed or removed, and
 **where** to find each thing, plus the full history. If the update changes the sheet itself (new Settings rows, the
@@ -229,17 +235,19 @@ The Dashboard's top band shows how many replies need an outcome and how many are
 
 ## Team meeting: "My last 24 hours"
 
-**📧 Outreach → My last 24 hours (report)** shows a snapshot of exactly the last 24 hours, up to the minute you
-click it, so everyone can read their numbers out:
-- **Last 24 hours:** emails sent (first emails and follow-ups), the daily standard ✅ met or ❌ how many short,
-  replies, bounces, new leads uploaded.
-- **New leads waiting.** If the standard wasn't met it also says **why**: no leads left, a Gmail paused or not
-  running, or sending paused.
-- **Campaign so far:** progress to the goal, days left and how many a day are needed, total sent, total replies,
-  total bounces, Gmails connected and sending, replies needing an outcome, people to follow up.
+**📧 Outreach → My last 24 hours (report)** shows one simple table, frozen at the minute you click it:
 
-**Copy as text** copies it all, ready to paste into WhatsApp or an email.
-The numbers come from the Log and Leads tabs, so they're the same whenever anyone clicks.
+| | Last 24 hours | So far |
+|---|---|---|
+| **Delivered** (sent, minus bounces) | ✓ | ✓ |
+| first emails / follow-ups | ✓ | ✓ |
+| Replies | ✓ | ✓ |
+| Bounces | ✓ | ✓ |
+| Daily standard | ✅ met or ❌ how many short | |
+
+Under it: progress to the goal (delivered), and **right now**: new leads waiting, Gmails sending, replies that need
+an outcome, people to follow up and late follow-ups. If the standard wasn't met it says **why** (no leads, a Gmail
+paused or stopped, bounces...). **Copy as text** gives the same thing for WhatsApp or email.
 
 ## Rules for free Gmails
 
@@ -317,6 +325,9 @@ The history is stored in **your** sheet, so they can't change it.
 - 🟡 Daily limit above 35 (in Settings, or for a Gmail on Inboxes), warm-up off (in Settings, or for a Gmail), opt-out line removed, follow-ups off, sending paused.
 - 🟡 Leads set back to New after being emailed, leads marked Replied by hand, duplicate leads.
 - 🟡 High bounce rate, Gmails paused, nothing sent in 24 hours, no leads waiting.
+
+**Choose who shows on the Leaderboard:** the **Team** tab has an **On Leaderboard** tick box for each person (far right).
+Untick someone to leave them off; they are still checked and still get alerts. Then click **Check all team sheets now**.
 
 **Your own numbers on the Leaderboard:** **📧 Outreach → Admin: watch team sheets → Leaderboard: my own
 numbers are OFF (click to switch)**. Type the name to show (e.g. "Simeon (admin)"). Your sheet joins the
