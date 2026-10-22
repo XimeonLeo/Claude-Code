@@ -2,6 +2,16 @@
 
 Every version of the outreach tracker, newest first. The same list is in the sheet: **📧 Outreach → What's new**.
 
+## v39 · 2026-10-22 · Guided tour, Earnings, delivered first, ready for other teams
+
+- **New:** Guided tour for new people: 12 short steps through every part of the system, with buttons that open each tab and window, a Do & don't page, and a checklist of where you are. First-timers are pointed to it when they open the sheet. _Where: Outreach → 🎓 Start here_
+- **New:** Earnings: record each sale (client, amount, what they bought). See your total, this month and your orders. Clicking "Customer" in the Replies window asks for the amount too. _Where: Outreach → 💰 Earnings, and the new Earnings tab_
+- **New:** Team Earnings Board: everyone who has made a sale, most earned first, with the team total. The admin publishes it; it appears in everyone's sheet (Team Earnings tab) and in the Earnings window. _Where: Outreach → 💰 Earnings → Team Earnings Board, and the Team Earnings tab_
+- **Changed:** Delivered (sent minus bounces) comes first everywhere: the Dashboard's "Delivered today" cards on every layout, and the Leaderboard now ranks by delivered. _Where: Dashboard, Leaderboard_
+- **New:** Other admins can run this for their own team: one settings block at the top of Code.gs (admins, team name, currency, board link) and a step-by-step ADMIN-GUIDE.md. _Where: Code.gs → YOUR TEAM'S SETTINGS_
+
+After this update, click **📧 Outreach → 1. Set up / repair this sheet** (or **Apply the update to this sheet** in What's new).
+
 ## v38 · 2026-10-22 · Simpler 24-hour report, update prompt, choose who is on the Leaderboard
 
 - **Changed:** The 24-hour report is simpler and counts DELIVERED emails (sent, minus bounces), not just sent. One table: last 24 hours next to so far, for delivered (first emails and follow-ups), replies and bounces. The daily standard is checked against delivered. _Where: Outreach → My last 24 hours (report)_

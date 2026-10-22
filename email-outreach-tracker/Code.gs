@@ -10,6 +10,8 @@
  *   - detects replies, bounces, auto-replies and "remove me" requests
  *   - logs every single action so everything can be tracked
  *
+ * Setting this up for YOUR OWN team? Fill in "YOUR TEAM'S SETTINGS" just below, then follow ADMIN-GUIDE.md.
+ *
  * Setup steps are in SETUP.md. Short version:
  *   1. Paste this file into Extensions -> Apps Script of a blank Google Sheet.
  *   2. Add the "Gmail API" service (Services + -> Gmail API -> Add).
@@ -19,6 +21,26 @@
  *      connectInbox (SETUP.md, Part 2).
  *   5. Leads: LEAD-PROMPT.txt, then Outreach -> Upload a lead file (CSV).
  */
+
+// ================================================================ YOUR TEAM'S SETTINGS
+// The only lines a new admin needs to change (ADMIN-GUIDE.md explains each one).
+
+// Who can use "Outreach -> Admin". Your Gmail, and any co-admins, separated by commas.
+var ADMINS = 'simeono.automation@gmail.com';
+
+// Your team's name and credit line, shown on the Dashboard, reports and boards.
+var BRAND_NAME = 'Paramount Orbit Scouting Centre';
+var BRAND_CREDIT = 'Designed by D\'XLNTInnovator';
+
+// Money: the sign shown before amounts on the Earnings windows and boards, e.g. '$', '₦', '£', '€'.
+var CURRENCY = '$';
+
+// Link to your team's Earnings Board sheet, so everyone sees it in their own sheet.
+// Leave empty at first: Outreach -> Admin -> Check all team sheets now creates the board and tells you
+// what to paste here (ADMIN-GUIDE.md, step 5).
+var TEAM_BOARD = '';
+
+// ================================================================ end of your team's settings
 
 // ---------------------------------------------------------------- per-Gmail copy settings
 // Leave these empty in the master sheet's own script.
@@ -35,18 +57,13 @@ if (typeof OUTREACH_CONFIG === 'object' && OUTREACH_CONFIG) {
 
 // Change both every time you publish a new version, and add what changed to CHANGELOG (further down).
 // People see the version in Outreach -> Which Gmail am I using?, and the changes in Outreach -> What's new.
-var CORE_BUILD = 38;
-var CORE_VERSION = 'v38';
+var CORE_BUILD = 39;
+var CORE_VERSION = 'v39';
 
 // Daily limits: anything from 1 up to Gmail's own cap. Above SAFE_LIMIT a free Gmail is more likely to be
 // flagged, so the sheet warns but allows it.
 var MAX_LIMIT = 500;
 var SAFE_LIMIT = 35;
-
-// ---------------------------------------------------------------- admins
-// Only these Gmails can use "Outreach -> Admin: watch team sheets".
-// Fill this in BEFORE you give Code.gs to your team. Separate several with commas.
-var ADMINS = 'simeono.automation@gmail.com'; // add more with commas, e.g. 'you@gmail.com, partner@gmail.com'
 
 // ---------------------------------------------------------------- constants
 
@@ -57,7 +74,8 @@ var SHEET = {
   LEADS: 'Leads',
   LOG: 'Log',
   IMPORT: 'Import',
-  DNC: 'Do Not Contact'
+  DNC: 'Do Not Contact',
+  EARN: 'Earnings'
 };
 
 var STATUS = {
@@ -128,7 +146,7 @@ var SETTINGS_DEF = [
   { key: 'defFu1', label: 'Default follow-up 1 (if a lead has none)', value: 'Hi {{first_name|there}}, just bumping this to the top of your inbox in case it got buried. Would it make sense to chat?', note: 'Only used when the lead has no Follow-up 1 Message. Leave blank to skip.' },
   { key: 'defFu2', label: 'Default follow-up 2 (if a lead has none)', value: 'Hi {{first_name|there}}, I will not keep filling your inbox, so this is my last note. If this is ever a priority, just reply and I will send details.', note: 'Only used when the lead has no Follow-up 2 Message. Leave blank to skip.' },
   { key: 'optOut', label: 'Opt-out line', value: 'P.S. Not relevant? Just reply "no" and I won\'t email you again.', note: 'Added to the end of every email. Leave blank for none.' },
-  { key: 'standard', label: 'Daily standard (emails sent per day)', value: '', note: 'Used by "My last 24 hours". Leave blank to use what your active Gmails can send today (daily limits, with warm-up).', added: true },
+  { key: 'standard', label: 'Daily standard (emails sent per day)', value: '', note: 'Emails DELIVERED per day (sent minus bounces). Used by "My last 24 hours". Leave blank to use what your active Gmails can send today (daily limits, with warm-up).', added: true },
   { key: 'paused', label: 'Pause everything', value: false, note: 'Set TRUE to stop all sending right away.' },
   { key: 'layout', label: 'Dashboard layout', value: 'Classic', note: 'Classic, Executive, Scoreboard, Funnel, Inbox Command or Compact. Outreach -> Choose dashboard layout shows a preview of each.' },
   { key: 'theme', label: 'Colour theme', value: 'Navy & Gold', note: 'Navy & Gold, Emerald & Gold, Burgundy & Gold, Notion Style or ClickUp Style. Then click Outreach -> Apply colour theme.' }
@@ -140,12 +158,16 @@ function onOpen() {
   // After an update: a notice in the corner and a highlighted first menu item, until the person opens
   // What's new. (Google does not let a window open by itself when the sheet opens.)
   var fresh = seenBuild_() < CORE_BUILD;
+  var newbie = !toured_();
   var apply = false;
   try { apply = needsApply_(SpreadsheetApp.getActiveSpreadsheet()); } catch (e) { /* not essential */ }
   try {
     if (apply) {
       SpreadsheetApp.getActiveSpreadsheet().toast('A new version (' + CORE_VERSION + ') is ready for this sheet. Click 📧 Outreach → ' +
         '🆕 Update ready, then "Apply the update". It takes about 30 seconds and keeps all your leads.', '🆕 Update ready', 60);
+    } else if (newbie) {
+      SpreadsheetApp.getActiveSpreadsheet().toast('New here? Click 📧 Outreach → 🎓 Start here for a 5-minute guided tour of everything.',
+        '🎓 Welcome', 30);
     } else if (fresh) {
       SpreadsheetApp.getActiveSpreadsheet().toast('Outreach was updated to ' + CORE_VERSION +
         '. Click 📧 Outreach → 🆕 What\'s new to see what changed and where to find it.', '🆕 Outreach updated', 30);
@@ -153,7 +175,8 @@ function onOpen() {
   } catch (e) { /* the menu item still shows it */ }
   SpreadsheetApp.getUi().createMenu('📧 Outreach')
     .addItem(apply ? '🆕 Update ready: click here to apply ' + CORE_VERSION
-      : fresh ? '🆕 What\'s new in ' + CORE_VERSION + ' (click to see)' : 'What\'s new / changelog', 'slot9')
+      : newbie ? '🎓 Start here: guided tour'
+      : fresh ? '🆕 What\'s new in ' + CORE_VERSION + ' (click to see)' : '🎓 Start here: tour, do & don\'t, what\'s new', 'slot9')
     .addSeparator()
     .addItem('1. Set up / repair this sheet', 'setupSheet')
     .addItem('Reset to default settings (keeps your leads)', 'slot3')
@@ -169,6 +192,7 @@ function onOpen() {
     .addSeparator()
     .addItem('Replies: set outcomes & follow-ups', 'slot6')
     .addItem('My last 24 hours (report)', 'slot7')
+    .addItem('💰 Earnings: record a sale & team board', 'slot10')
     .addSeparator()
     .addItem('Which Gmail am I using?', 'whoAmI')
     .addItem('Choose dashboard layout', 'slot4')
@@ -290,6 +314,10 @@ function setupSheet() {
   var oldImport = ss.getSheetByName(SHEET.IMPORT);
   if (oldImport && oldImport.getLastRow() === 0) ss.deleteSheet(oldImport);
   ensureSheet_(ss, SHEET.DNC, DNC_HEADERS);
+  var es = earnSheet_(ss);
+  es.getRange(2, colMap_(es)['Date'] + 1, es.getMaxRows() - 1, 1).setNumberFormat('yyyy-mm-dd');
+  es.getRange(2, colMap_(es)['Amount'] + 1, es.getMaxRows() - 1, 1).setNumberFormat('#,##0.00');
+  es.getRange(1, 1).setNote('Your sales. Add them with Outreach -> 💰 Earnings (or type them here: one row per sale).');
 
   // Dashboard (rebuilt every time, holds no data of its own)
   loadTheme_(ss);
@@ -298,7 +326,7 @@ function setupSheet() {
 
   // Tab order and colours
   var order = [SHEET.DASH, SHEET.LEADS, SHEET.INBOXES,
-               SHEET.SETTINGS, SHEET.LOG, SHEET.DNC];
+               SHEET.SETTINGS, SHEET.LOG, SHEET.DNC, SHEET.EARN];
   order.forEach(function (name, idx) {
     var sh = ss.getSheetByName(name);
     ss.setActiveSheet(sh); ss.moveActiveSheet(idx + 1);
@@ -638,7 +666,7 @@ function addStatusColors_(ld, lc) {
 
 // ---------------------------------------------------------------- look and feel
 
-var BRAND = { name: 'Paramount Orbit Scouting Centre', credit: 'Designed by D\'XLNTInnovator' };
+var BRAND = { name: BRAND_NAME, credit: BRAND_CREDIT };
 // Colour themes. Pick one in Settings -> "Colour theme", then Outreach -> Apply colour theme.
 var THEMES = {
   'Navy & Gold':     { navy: '#0B1530', navy2: '#13204A', ivory: '#FBF8F1', line: '#E7DFC9', muted: '#6B7189', soft: '#C7CCE0', darkTrack: '#2A3760' },
@@ -753,6 +781,7 @@ function buildDashboard_(ss) {
     ['bounceAll', '=' + LOG('BOUNCE')], ['bounceToday', '=' + LOG('BOUNCE', 1)],
     ['unsubAll', '=' + LOG('UNSUB')],
     ['delivered', '=MAX(0,{sentAll}-{bounceAll})'],
+    ['delivToday', '=MAX(0,{sentToday}-{bounceToday})'],
     ['progress', '=IFERROR(MIN(1,{delivered}/{goal}),0)'],
     ['toGo', '=MAX(0,{goal}-{delivered})'],
     ['dayNum', '=MAX(1,MIN({length},TODAY()-{start}+1))'],
@@ -878,7 +907,7 @@ function buildDashboard_(ss) {
 
   section(G + 7, 'Today');
   cardRow(G + 8, [
-    { label: 'Sent today', value: '={sentToday}', sub: '="Needed per day: "&TEXT({needed},"#,##0")', bar: bar('{sentToday}/{needed}') },
+    { label: 'Delivered today', value: '={delivToday}', sub: '="Sent "&TEXT({sentToday},"#,##0")&"  ·  needed per day "&TEXT({needed},"#,##0")', bar: bar('{delivToday}/{needed}') },
     { label: 'Replies today', value: '={replyToday}', sub: '="Replies in total: "&TEXT({replyAll},"#,##0")' },
     { label: 'Bounces today', value: '={bounceToday}', sub: '="Bounce rate today: "&TEXT({bounceRateToday},"0.0%")' },
     { label: 'New people contacted today', value: '={firstToday}', sub: '="Follow-ups sent today: "&TEXT({fuToday},"#,##0")' }
@@ -1175,7 +1204,7 @@ var DASH_LAYOUTS_ = {
     dashChart_(c, 'Goal', 'pie', [d.getRange(38, 18, 3, 2)], h, 560, 236, [T.gold, T.track],
       { col: 10, options: { pieHole: 0.62, pieSliceText: 'none' } });
     c.cardRow(h + 8, [
-      { label: 'Sent today', value: '={sentToday}', sub: '="Needed per day: "&TEXT({needed},"#,##0")', bar: c.bar('{sentToday}/{needed}') },
+      { label: 'Delivered today', value: '={delivToday}', sub: '="Sent "&TEXT({sentToday},"#,##0")&"  ·  needed per day "&TEXT({needed},"#,##0")', bar: c.bar('{delivToday}/{needed}') },
       { label: 'Replies today', value: '={replyToday}', sub: '="Replies in total: "&TEXT({replyAll},"#,##0")' },
       { label: 'Reply rate', value: '={replyRate}', fmt: c.pct, sub: '=TEXT({replyAll},"#,##0")&" replies"', bar: c.bar('{replyRate}/0.1') },
       { label: 'Bounce rate', value: '={bounceRate}', fmt: c.pct, sub: '="Keep under 2%"',
@@ -1209,7 +1238,7 @@ var DASH_LAYOUTS_ = {
     });
     d.getRange(hr, 2, 1, 15).setBorder(null, null, true, null, null, null, T.gold, SpreadsheetApp.BorderStyle.SOLID_THICK);
     var lines = [
-      ['EMAILS SENT', '={sentToday}', '={sentAll}', '="Need "&TEXT({needed},"#,##0")&"/day"'],
+      ['DELIVERED', '={delivToday}', '={delivered}', '="Need "&TEXT({needed},"#,##0")&"/day"'],
       ['REPLIES', '={replyToday}', '={replyAll}', '=TEXT({replyRate},"0.0%")&" reply rate"'],
       ['BOUNCES', '={bounceToday}', '={bounceAll}', '=TEXT({bounceRate},"0.0%")&" bounce rate"'],
       ['NEW PEOPLE', '={firstToday}', '={firstAll}', '="of "&TEXT({leads},"#,##0")&" leads"'],
@@ -1263,7 +1292,7 @@ var DASH_LAYOUTS_ = {
     var t = r0 + steps.length + 2;
     c.section(t, 'Today');
     c.cardRow(t + 1, [
-      { label: 'Sent today', value: '={sentToday}', sub: '="Needed per day: "&TEXT({needed},"#,##0")', bar: c.bar('{sentToday}/{needed}') },
+      { label: 'Delivered today', value: '={delivToday}', sub: '="Sent "&TEXT({sentToday},"#,##0")&"  ·  needed per day "&TEXT({needed},"#,##0")', bar: c.bar('{delivToday}/{needed}') },
       { label: 'New people today', value: '={firstToday}', sub: '="Follow-ups: "&TEXT({fuToday},"#,##0")' },
       { label: 'Replies today', value: '={replyToday}', sub: '="In total: "&TEXT({replyAll},"#,##0")' },
       { label: 'Goal', value: '={progress}', fmt: c.pct, sub: '=TEXT({delivered},"#,##0")&" of "&TEXT({goal},"#,##0")', bar: c.bar('{progress}') }
@@ -1276,7 +1305,7 @@ var DASH_LAYOUTS_ = {
     var d = c.d, T = c.T, X = c.X, It = c.It;
     c.section(7, 'Today');
     c.cardRow(8, [
-      { label: 'Sent today', value: '={sentToday}', sub: '="Capacity: "&TEXT({capacity},"#,##0")&" a day"', bar: c.bar('{sentToday}/{capacity}') },
+      { label: 'Delivered today', value: '={delivToday}', sub: '="Sent "&TEXT({sentToday},"#,##0")&"  ·  capacity "&TEXT({capacity},"#,##0")&" a day"', bar: c.bar('{delivToday}/{capacity}') },
       { label: 'Active Gmails', value: '={activeInboxes}&" of "&{inboxes}', sub: '="Paused: "&({inboxes}-{activeInboxes})' },
       { label: 'Leads waiting', value: '={waiting}', sub: '="In sequence: "&TEXT({inSeq},"#,##0")' },
       { label: 'Bounces today', value: '={bounceToday}', sub: '="Bounce rate today: "&TEXT({bounceRateToday},"0.0%")' }
@@ -1315,7 +1344,7 @@ var DASH_LAYOUTS_ = {
     var d = c.d, T = c.T, X = c.X;
     var COLS4 = [2, 6, 10, 14];
     var tiles = [
-      ['Sent today', '={sentToday}', c.num, dashTrend_(T, ['SENT*']), '="Need "&TEXT({needed},"#,##0")&" a day"'],
+      ['Delivered today', '={delivToday}', c.num, dashTrend_(T, ['SENT*']), '="Sent "&TEXT({sentToday},"#,##0")&"  ·  need "&TEXT({needed},"#,##0")&" a day"'],
       ['Replies today', '={replyToday}', c.num, dashTrend_(T, ['REPLY', 'UNSUB']), '="Total "&TEXT({replyAll},"#,##0")'],
       ['Bounces today', '={bounceToday}', c.num, dashTrend_(T, ['BOUNCE'], T.bad), '="Rate "&TEXT({bounceRate},"0.0%")'],
       ['New people today', '={firstToday}', c.num, dashTrend_(T, ['SENT_1']), '="Total "&TEXT({firstAll},"#,##0")'],
@@ -2050,6 +2079,7 @@ function runForInbox_(forceCheck) {
     var now = new Date();
     setInboxCell_(ss, inbox.row, 'Last Run', now);
     try { updateBanner_(ss); } catch (e) { /* the menu still shows the update */ }
+    try { syncTeamBoard_(ss, false); } catch (e) { /* the board is a nice-to-have */ }
     var scan = logScan_(ss, me, now);
     var notes = [];
     var resumed = function () { scan.lastResume = now; scan.recentSent = 0; scan.recentBounces = 0; };
@@ -2533,6 +2563,186 @@ function encodeHeader_(s) {
 // ---------------------------------------------------------------- sheet helpers
 
 
+// ---------------------------------------------------------------- guided tour
+
+// The walkthrough in Outreach -> 🎓 Start here. Each step: what it is, how to use it, do / don't,
+// and buttons that take you to the tab (go) or open the window (open).
+var TOUR = [
+  { icon: '👋', title: 'Welcome: how it works',
+    what: 'This sheet runs your cold email outreach by itself. You give it leads, and your Gmails email them, follow up, and catch the replies. Your job is to answer replies and close sales.',
+    steps: ['You <b>upload leads</b> (people, their email, and the message for each).',
+            'Your <b>Gmails send</b> by themselves every 15 minutes during sending hours, even with your computer off.',
+            '<b>Follow-ups</b> go out by themselves a few days later, in the same email thread.',
+            '<b>Replies and bounces</b> are caught by themselves. Follow-ups stop for anyone who replies.',
+            'You <b>answer replies</b>, mark the outcome, and <b>record your sales</b>.'],
+    tip: 'Use the ◀ ▶ buttons to go through each part. You can come back any time: 📧 Outreach → Start here.' },
+  { icon: '🗺️', title: 'Find your way: menu and tabs',
+    what: 'Everything you do starts from the <b>📧 Outreach</b> menu at the top of the sheet (next to Help). The tabs at the bottom hold your data.',
+    steps: ['<b>Dashboard</b>: your numbers. Look, don\'t type.',
+            '<b>Leads</b>: one row per person. You may type in <b>Outcome</b> and <b>Notes</b> only.',
+            '<b>Inboxes</b>: one row per Gmail. You may change <b>Status</b>, <b>Daily Limit</b> and the <b>Warm-up</b> columns.',
+            '<b>Settings</b>: all the controls. Change column B only.',
+            '<b>Log</b>: every email, reply and bounce. Never edit it.',
+            '<b>Do Not Contact</b>: people never emailed again. Add people who ask to be removed.',
+            '<b>Earnings</b>: your sales.'],
+    dont: ['Never rename, delete, move or sort the first row (the column names) of any tab.'], go: 'Dashboard' },
+  { icon: '⚙️', title: 'Settings: set it once',
+    what: 'Open the Settings tab and check these before you start. Type numbers as plain numbers, e.g. 5000.',
+    steps: ['<b>Campaign name</b>, <b>Goal</b> (emails delivered), <b>start date</b> and <b>length</b>.',
+            '<b>Default daily limit</b> per Gmail (35 is safest) and the <b>warm-up</b> (new Gmails start at 20 a day, +5 a day).',
+            '<b>Send window</b> (e.g. 8 to 18) and <b>Send on weekends</b>.',
+            '<b>Sending pace</b>: Steady (spread over the day, safest) or Fast.',
+            '<b>Signature</b> and <b>Opt-out line</b>.',
+            '<b>Pause everything</b>: tick it to stop all sending at once.'],
+    dont: ['Don\'t change the names in column A.', 'Don\'t raise the daily limit fast. Add more Gmails instead.'], go: 'Settings' },
+  { icon: '📮', title: 'Connect your Gmails',
+    what: 'Each Gmail that sends must be connected once. It then appears on the Inboxes tab.',
+    steps: ['<b>The sheet owner\'s Gmail</b>: 📧 Outreach → Connect THIS Gmail.',
+            '<b>Every other Gmail</b> needs its own copy of the script (SETUP.md, Part 2), then Outreach → Spread waiting leads across inboxes.',
+            'On <b>Inboxes</b>, read <b>Health</b> (🟢 good, 🟡 watch, 🔴 paused for bounces) and <b>Last Result</b> (what it did last time and why).',
+            'Give one Gmail its own limit or warm-up in its <b>Daily Limit</b> / <b>Warm-up</b> cells (blank = Settings).'],
+    dont: ['Don\'t connect a Gmail in a window where other Gmails are signed in. Use an Incognito window.'], go: 'Inboxes' },
+  { icon: '📥', title: 'Get leads and upload them',
+    what: 'Leads come from the lead prompt (LEAD-PROMPT.txt) in any AI chat, or from your own list.',
+    steps: ['Copy LEAD-PROMPT.txt into Claude, ChatGPT or Gemini and answer its questions. Download the file it gives you.',
+            '<b>Check every email</b> with an email checker (e.g. MillionVerifier). Keep only "Deliverable".',
+            '📧 Outreach → <b>Upload a lead file (CSV)</b>. Pick one or several files, choose a Gmail or "spread evenly", Check files, Import.'],
+    dont: ['Never upload a list you haven\'t checked: bounces get Gmails paused and blocked.', 'Don\'t paste leads straight into the Leads tab.'],
+    open: 'upload', openLabel: 'Open the upload window' },
+  { icon: '🚀', title: 'Sending: it runs by itself',
+    what: 'Every 15 minutes in the send window, each Gmail sends some of its leads, follow-ups first.',
+    steps: ['Each Gmail stops at its <b>daily limit</b>. New Gmails <b>warm up</b> (start low, climb each day).',
+            'If a Gmail gets too many bounces it pauses itself (<b>Paused - bounces</b>) and restarts by itself after 2 days.',
+            'If a Gmail stops, working Gmails take over its waiting leads by themselves.',
+            '<b>Run now for THIS Gmail</b> sends a few straight away (for testing).'],
+    dont: ['Don\'t send to the same people from several sheets.', 'Don\'t set leads back to New after they were emailed: they get emailed again.'], go: 'Inboxes' },
+  { icon: '🔁', title: 'Follow-ups',
+    what: 'Follow-up 1 goes 3 days after the first email, follow-up 2 four days later (Settings). Same Gmail, same thread.',
+    steps: ['They stop as soon as the person replies, bounces or asks to be removed.',
+            'Track them on the Dashboard\'s <b>Follow-ups</b> section: sent, due today, <b>overdue</b> (should be 0) and replies after a follow-up.'],
+    dont: ['If "Overdue" is not 0, check that Gmail\'s Last Result on Inboxes: it has probably stopped.'], go: 'Dashboard' },
+  { icon: '💬', title: 'Replies: answer the same day',
+    what: 'Replies are found by themselves. You answer them, from the Gmail that emailed that person.',
+    steps: ['📧 Outreach → <b>Replies: set outcomes &amp; follow-ups</b> shows every reply that needs you.',
+            'Answer in Gmail (<b>Open in Gmail</b> opens the right one), then click the outcome: Interested, Meeting booked, Not interested, Customer...',
+            'The <b>To follow up</b> list keeps everyone Interested or "Follow up later" until it becomes a meeting or a sale.'],
+    dont: ['Don\'t mark people "Replied" by hand. The system does it.', 'Don\'t leave replies without an outcome: the Dashboard counts them.'],
+    open: 'replies', openLabel: 'Open the Replies window' },
+  { icon: '💰', title: 'Record your sales',
+    what: 'Every order goes on your Earnings, and onto the team Earnings Board.',
+    steps: ['📧 Outreach → <b>💰 Earnings</b> → type the client, amount and what they bought → Save.',
+            'Or in the Replies window click <b>Customer</b> and type the amount.',
+            'The <b>Team Earnings Board</b> tab shows everyone who has made a sale, most earned first.'],
+    dont: ['Record each sale once, with the real amount.'], open: 'earn', openLabel: 'Open Earnings' },
+  { icon: '📊', title: 'Your numbers and the 24-hour report',
+    what: 'The Dashboard shows today and all time. "Delivered" means sent minus bounces: that is what counts.',
+    steps: ['📧 Outreach → <b>My last 24 hours (report)</b>: delivered, replies and bounces for the last 24 hours and so far, the daily standard, and what to fix. <b>Copy as text</b> for WhatsApp.',
+            'Change the look: <b>Choose dashboard layout</b> and <b>Apply colour theme</b>.'],
+    open: 'report', openLabel: 'Open my 24-hour report' },
+  { icon: '🩺', title: 'When something looks wrong',
+    what: 'Start with the Inboxes tab: <b>Last Result</b> says what each Gmail did and why.',
+    steps: ['Lead <b>Send failed</b>: read its Notes, fix the email or message, set Status back to New.',
+            'Lead <b>Needs message</b>: fill in its Message, set Status to New.',
+            'Gmail <b>Paused - bounces</b>: check your list, then set Status to Active (or wait 2 days).',
+            'Something looks broken: 📧 Outreach → <b>Reset to default settings (keeps your leads)</b>.',
+            'Data looks missing: <b>File → Version history</b> shows every change and can restore it.'],
+    go: 'Inboxes' },
+  { icon: '🆕', title: 'Updates',
+    what: 'New versions arrive by themselves within about an hour.',
+    steps: ['When one is ready, a yellow <b>UPDATE READY</b> banner shows on the Dashboard and the menu starts with <b>🆕 Update ready</b>.',
+            'Click it, read what\'s new, then <b>Apply the update</b>. It takes 30 seconds and keeps all your leads.'],
+    tip: 'That\'s the tour. Have a look at the Do &amp; don\'t tab next.' }
+];
+
+var DOS = ['Check every lead list with an email checker before uploading.',
+  'Keep each free Gmail at 35 a day or less, with the warm-up on.',
+  'Answer every reply the same day, from the Gmail that emailed them.',
+  'Set an Outcome for every reply (Outreach → Replies).',
+  'Record every sale in 💰 Earnings.',
+  'Look at the Dashboard and Inboxes every day (10 minutes).',
+  'Apply updates when the banner shows.',
+  'Use each Gmail like a person too: open it, reply to a few normal emails.'];
+var DONTS = ['Don\'t rename, delete, move or sort row 1 of any tab. Sort with Data → Sort range, "Data has header row" ticked.',
+  'Don\'t type in the Dashboard, the Log, or the grey columns the script fills in.',
+  'Don\'t set emailed leads back to New (they get emailed again).',
+  'Don\'t mark replies by hand, and don\'t delete leads or Log rows: the admin sees it.',
+  'Don\'t raise daily limits suddenly. Add Gmails instead.',
+  'Don\'t upload lists you haven\'t checked.',
+  'Don\'t remove the opt-out line, and never email anyone on Do Not Contact.',
+  'Don\'t share your master sheet with anyone except your admin.'];
+
+function tourStatus_(ss) {
+  var out = { setup: sheetBuild_(ss) > 0, gmails: 0, leads: 0, waiting: 0, needOutcome: 0, sales: 0 };
+  try {
+    out.gmails = inboxRows_(ss).length;
+    var ld = ss.getSheetByName(SHEET.LEADS);
+    if (ld && ld.getLastRow() > 1) {
+      var lc = colMap_(ld);
+      ld.getRange(2, 1, ld.getLastRow() - 1, ld.getLastColumn()).getValues().forEach(function (r) {
+        if (!normEmail_(r[lc['Email']])) return;
+        out.leads++;
+        if (String(r[lc['Status']]).trim() === STATUS.NEW) out.waiting++;
+        if (replyCategory_(r, lc) === 'need') out.needOutcome++;
+      });
+    }
+    var es = ss.getSheetByName(SHEET.EARN);
+    out.sales = es ? Math.max(0, es.getLastRow() - 1) : 0;
+  } catch (e) { /* the checklist is a nice-to-have */ }
+  return out;
+}
+
+function tourHtml_(T, start, status, newsHtml) {
+  var steps = TOUR.map(function (t, i) {
+    return '<div class="step" id="s' + i + '"' + (i ? ' style="display:none"' : '') + '>' +
+      '<h2>' + t.icon + ' ' + t.title + '<span>' + (i + 1) + ' / ' + TOUR.length + '</span></h2>' +
+      '<p>' + t.what + '</p>' +
+      (t.steps ? '<ol>' + t.steps.map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ol>' : '') +
+      (t.dont ? '<div class="dont">' + t.dont.map(function (x) { return '⛔ ' + x; }).join('<br>') + '</div>' : '') +
+      (t.tip ? '<div class="tip">💡 ' + t.tip + '</div>' : '') +
+      '<div class="acts">' + (t.go ? '<button class="ghost" onclick="act(\'goto\',\'' + t.go + '\')">Show me the ' + t.go + ' tab</button>' : '') +
+      (t.open ? '<button class="ghost" onclick="act(\'open\',\'' + t.open + '\')">' + t.openLabel + '</button>' : '') + '</div></div>';
+  }).join('');
+  var check = function (ok, text) { return '<li class="' + (ok ? 'ok' : '') + '">' + (ok ? '✅' : '⬜') + ' ' + text + '</li>'; };
+  var checklist = '<ul class="check">' +
+    check(status.setup, 'Sheet set up (📧 Outreach → 1. Set up / repair)') +
+    check(status.gmails > 0, 'Gmails connected: <b>' + status.gmails + '</b>') +
+    check(status.leads > 0, 'Leads uploaded: <b>' + status.leads + '</b> (' + status.waiting + ' waiting)') +
+    check(status.leads > 0 && status.needOutcome === 0, 'Replies needing an outcome: <b>' + status.needOutcome + '</b>') +
+    check(status.sales > 0, 'Sales recorded: <b>' + status.sales + '</b>') + '</ul>';
+  return '<style>body{font-family:Arial,sans-serif;margin:0;padding:0 12px;color:#1D2333}' +
+    '.tabs{display:flex;gap:8px;margin:4px 0 10px}.tab{padding:9px 14px;border-radius:6px;border:2px solid ' + T.line + ';cursor:pointer;font-weight:bold;background:#fff;font-size:13px}' +
+    '.tab.on{background:' + T.navy + ';color:' + T.onNavy + ';border-color:' + T.gold + '}' +
+    '.step{border:1px solid ' + T.line + ';border-top:4px solid ' + T.gold + ';border-radius:8px;padding:6px 18px 14px;min-height:340px}' +
+    '.step h2{font-size:20px;color:' + T.strong + '}.step h2 span{float:right;font-size:12px;color:#999;font-weight:normal;margin-top:6px}' +
+    '.step p{font-size:14px;line-height:1.5}.step ol{font-size:14px;line-height:1.6;padding-left:20px}' +
+    '.dont{background:#FCEDEB;border-left:4px solid ' + T.bad + ';padding:8px 12px;border-radius:4px;font-size:13px;line-height:1.5;margin-top:8px}' +
+    '.tip{background:#FFF8E5;border-left:4px solid ' + T.gold + ';padding:8px 12px;border-radius:4px;font-size:13px;margin-top:8px}' +
+    '.acts{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap}.ghost{background:#fff;border:2px solid ' + T.navy + ';color:' + T.strong + ';border-radius:4px;padding:7px 12px;font-weight:bold;cursor:pointer}' +
+    '.nav{display:flex;align-items:center;justify-content:space-between;margin:10px 0}.nav button{background:' + T.navy + ';color:' + T.onNavy + ';border:2px solid ' + T.gold + ';border-radius:4px;padding:8px 18px;font-weight:bold;cursor:pointer}' +
+    '.nav button:disabled{opacity:.35}.dots i{display:inline-block;width:8px;height:8px;border-radius:50%;background:' + T.line + ';margin:0 3px}.dots i.on{background:' + T.gold + '}' +
+    '.check{list-style:none;padding:0;font-size:14px;line-height:1.9}.check li.ok{color:' + T.good + '}' +
+    '.cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}.cols h3{margin:6px 0}.cols ul{padding-left:18px;font-size:13px;line-height:1.6}' +
+    '.do{border:1px solid ' + T.line + ';border-top:4px solid ' + T.good + ';border-radius:8px;padding:6px 12px}.no{border:1px solid ' + T.line + ';border-top:4px solid ' + T.bad + ';border-radius:8px;padding:6px 12px}' +
+    '#msg{font-size:12px;color:' + T.muted + '}</style>' +
+    '<div class="tabs"><div class="tab" id="t-tour" onclick="tab(\'tour\')">🎓 Guided tour</div><div class="tab" id="t-dos" onclick="tab(\'dos\')">✅ Do &amp; don\'t</div>' +
+    '<div class="tab" id="t-me" onclick="tab(\'me\')">📋 My checklist</div><div class="tab" id="t-new" onclick="tab(\'new\')">🆕 What\'s new</div></div>' +
+    '<div id="p-tour">' + steps + '<div class="nav"><button id="prev" onclick="go(-1)">◀ Back</button><span class="dots" id="dots"></span>' +
+    '<button id="next" onclick="go(1)">Next ▶</button></div><div id="msg"></div></div>' +
+    '<div id="p-dos" style="display:none"><div class="cols"><div class="do"><h3>✅ Do</h3><ul>' + DOS.map(function (x) { return '<li>' + x + '</li>'; }).join('') +
+    '</ul></div><div class="no"><h3>⛔ Don\'t</h3><ul>' + DONTS.map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ul></div></div></div>' +
+    '<div id="p-me" style="display:none"><h3>Where you are</h3>' + checklist +
+    '<p style="font-size:13px;color:#555">Full written guide: SETUP.md (ask your admin). Come back to this tour any time: 📧 Outreach → Start here.</p></div>' +
+    '<div id="p-new" style="display:none">' + newsHtml + '</div>' +
+    '<script>var cur=0,N=' + TOUR.length + ';' +
+    'function tab(w){["tour","dos","me","new"].forEach(function(x){document.getElementById("p-"+x).style.display=x==w?"":"none";document.getElementById("t-"+x).className="tab"+(x==w?" on":"");});}' +
+    'function go(d){document.getElementById("s"+cur).style.display="none";cur=Math.max(0,Math.min(N-1,cur+d));document.getElementById("s"+cur).style.display="";draw();' +
+    'if(cur==N-1)google.script.run.slot9("toured");}' +
+    'function draw(){document.getElementById("prev").disabled=cur==0;document.getElementById("next").disabled=cur==N-1;var h="";for(var i=0;i<N;i++)h+="<i"+(i==cur?\' class="on"\':"")+"></i>";document.getElementById("dots").innerHTML=h;}' +
+    'function act(a,x){document.getElementById("msg").textContent="Opening...";google.script.run.withSuccessHandler(function(){document.getElementById("msg").textContent=a=="goto"?"Done: the "+x+" tab is open behind this window.":"";})' +
+    '.withFailureHandler(function(e){document.getElementById("msg").textContent=(e&&e.message?e.message:e);}).slot9(a,x);}' +
+    'draw();tab("' + start + '");</script>';
+}
+
 // ---------------------------------------------------------------- changelog
 
 // Every version, newest first. Shown in Outreach -> What's new after each update.
@@ -2540,6 +2750,13 @@ function encodeHeader_(s) {
 // Each item: [kind, what changed, where to find it]. kind: New, Improved, Fixed, Changed or Removed.
 // repair: true = people should click "Apply the update to this sheet" (runs Set up / repair).
 var CHANGELOG = [
+  { v: 39, date: '2026-10-22', title: 'Guided tour, Earnings, delivered first, ready for other teams', repair: true, items: [
+    ['New', 'Guided tour for new people: 12 short steps through every part of the system, with buttons that open each tab and window, a Do & don\'t page, and a checklist of where you are. First-timers are pointed to it when they open the sheet.', 'Outreach -> 🎓 Start here'],
+    ['New', 'Earnings: record each sale (client, amount, what they bought). See your total, this month and your orders. Clicking "Customer" in the Replies window asks for the amount too.', 'Outreach -> 💰 Earnings, and the new Earnings tab'],
+    ['New', 'Team Earnings Board: everyone who has made a sale, most earned first, with the team total. The admin publishes it; it appears in everyone\'s sheet (Team Earnings tab) and in the Earnings window.', 'Outreach -> 💰 Earnings -> Team Earnings Board, and the Team Earnings tab'],
+    ['Changed', 'Delivered (sent minus bounces) comes first everywhere: the Dashboard\'s "Delivered today" cards on every layout, and the Leaderboard now ranks by delivered.', 'Dashboard, Leaderboard'],
+    ['New', 'Other admins can run this for their own team: one settings block at the top of Code.gs (admins, team name, currency, board link) and a step-by-step ADMIN-GUIDE.md.', 'Code.gs -> YOUR TEAM\'S SETTINGS']
+  ] },
   { v: 38, date: '2026-10-22', title: 'Simpler 24-hour report, update prompt, choose who is on the Leaderboard', repair: true, items: [
     ['Changed', 'The 24-hour report is simpler and counts DELIVERED emails (sent, minus bounces), not just sent. One table: last 24 hours next to so far, for delivered (first emails and follow-ups), replies and bounces. The daily standard is checked against delivered.', 'Outreach -> My last 24 hours (report)'],
     ['New', 'When an update is ready, everyone is told: a yellow banner across the top of the Dashboard, a notice when the sheet opens, and "🆕 Update ready" at the top of the menu, until they click Apply the update.', 'Dashboard banner and Outreach -> 🆕 Update ready'],
@@ -2688,15 +2905,31 @@ var CHANGELOG = [
 
 // Outreach -> What's new. Uses the loader's spare slot 9. The window calls slot9('repair') to apply
 // the update to this sheet. Opening it marks the current version as seen (per person).
-function slot9(action) {
+// Outreach -> 🎓 Start here / 🆕 What's new: one window with the guided tour, do & don't, a checklist and
+// the changelog. It opens on What's new when there is an update, otherwise on the tour.
+function slot9(action, x) {
   if (action === 'repair') return applyUpdate_();
+  if (action === 'toured') { try { PropertiesService.getUserProperties().setProperty('TOURED', '1'); } catch (e) { /* ok */ } return; }
+  if (action === 'goto') { var sh = ss_().getSheetByName(x); if (sh) sh.activate(); return; }
+  if (action === 'open') {
+    var open = { upload: showUploadDialog, replies: slot6, report: slot7, earn: slot10, layout: slot4 }[x];
+    if (open) open();
+    return;
+  }
   askAllPermissions_();
   var ss = ss_();
   loadTheme_(ss);
   var seen = seenBuild_();
+  var apply = needsApply_(ss);
+  var start = apply || (seen && seen < CORE_BUILD && toured_()) ? 'new' : 'tour';
   try { PropertiesService.getUserProperties().setProperty('SEEN_BUILD', String(CORE_BUILD)); } catch (e) { /* not essential */ }
-  var html = HtmlService.createHtmlOutput(changelogHtml_(THEME, seen, needsApply_(ss))).setWidth(820).setHeight(680);
-  SpreadsheetApp.getUi().showModalDialog(html, 'What\'s new in Outreach ' + CORE_VERSION);
+  var html = HtmlService.createHtmlOutput(tourHtml_(THEME, start, tourStatus_(ss), changelogHtml_(THEME, seen, apply)))
+    .setWidth(860).setHeight(700);
+  SpreadsheetApp.getUi().showModalDialog(html, start === 'new' ? 'What\'s new in Outreach ' + CORE_VERSION : 'Start here: guided tour');
+}
+
+function toured_() {
+  try { return PropertiesService.getUserProperties().getProperty('TOURED') === '1'; } catch (e) { return true; }
 }
 
 // The last version this person has seen in the What's new window (0 = never opened it).
@@ -2772,16 +3005,16 @@ function changelogHtml_(T, seen, needRepair) {
     '.it small{display:block;color:' + T.muted + ';margin-top:3px}' +
     '.fix{background:#FFF8E5;border-left:4px solid ' + T.gold + ';padding:10px 12px;border-radius:4px;margin-bottom:12px;font-size:13px}' +
     '.btn{background:' + T.navy + ';color:' + T.onNavy + ';border:2px solid ' + T.gold + ';border-radius:4px;padding:8px 16px;font-weight:bold;cursor:pointer;margin-top:8px}' +
-    'details{margin:14px 0 20px}summary{cursor:pointer;font-weight:bold;color:' + T.strong + ';padding:6px 0}#msg{margin-left:10px;font-size:12px}</style>' +
+    'details{margin:14px 0 20px}summary{cursor:pointer;font-weight:bold;color:' + T.strong + ';padding:6px 0}#amsg{margin-left:10px;font-size:12px}</style>' +
     '<div class="band"><b>You\'re on Outreach ' + esc(CORE_VERSION) + '</b><div>' +
     (seen && seen < CORE_BUILD ? 'Changes since you last looked (v' + seen + ')' : 'Latest changes') + '</div></div>' +
     (needRepair ? '<div class="fix"><b>🆕 Update ready for this sheet.</b> Click the button to get the new Dashboard, ' +
       'Settings and columns. It takes about 30 seconds and keeps all your leads and results.<br>' +
-      '<button class="btn" id="go" onclick="go()">Apply the update to this sheet</button><span id="msg"></span></div>' : '') +
+      '<button class="btn" id="ago" onclick="applyGo()">Apply the update to this sheet</button><span id="amsg"></span></div>' : '') +
     fresh.map(block).join('') +
     '<details><summary>Full history: every version since the start (' + CHANGELOG.length + ')</summary>' +
     CHANGELOG.filter(function (c) { return fresh.indexOf(c) < 0; }).map(block).join('') + '</details>' +
-    '<script>function go(){var b=document.getElementById("go"),m=document.getElementById("msg");b.disabled=true;m.textContent="Updating the sheet... about 30 seconds.";' +
+    '<script>function applyGo(){var b=document.getElementById("ago"),m=document.getElementById("amsg");b.disabled=true;m.textContent="Updating the sheet... about 30 seconds.";' +
     'google.script.run.withSuccessHandler(function(r){m.textContent=r;}).withFailureHandler(function(e){b.disabled=false;m.textContent="Could not update: "+(e&&e.message?e.message:e);}).slot9("repair");}</script>';
 }
 
@@ -2792,8 +3025,8 @@ var FOLLOW_OUTCOMES = ['Interested', 'Follow up later'];
 
 // Outreach -> Replies: one window with every reply that still needs you: set the outcome in one click,
 // no searching the Leads tab. Uses the loader's spare slot 6. The window calls slot6('outcome', ...) to save.
-function slot6(action, leadId, outcome, note) {
-  if (action === 'outcome') return setOutcome_(leadId, outcome, note);
+function slot6(action, leadId, outcome, note, amount) {
+  if (action === 'outcome') return setOutcome_(leadId, outcome, note, amount);
   askAllPermissions_();
   var ss = ss_();
   loadTheme_(ss);
@@ -2838,7 +3071,7 @@ function replyCategory_(r, lc) {
 }
 
 // Saves an outcome (and an optional note) chosen in the Replies window, then sends back the new lists.
-function setOutcome_(leadId, outcome, note) {
+function setOutcome_(leadId, outcome, note, amount) {
   outcome = String(outcome || '').trim();
   if (outcome && OUTCOMES.indexOf(outcome) < 0) throw new Error('Unknown outcome: ' + outcome);
   var ss = ss_();
@@ -2853,6 +3086,10 @@ function setOutcome_(leadId, outcome, note) {
     up['Notes'] = (old ? old + '\n' : '') + Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone(), 'MMM d') + ': ' + note;
   }
   updateLead_(ld, lc, leadId, cur.row, up);
+  if (outcome === 'Customer' && Number(amount) > 0) {
+    addSale_(ss, { email: cur.values[lc['Email']], amount: amount, notes: note,
+      client: String(cur.values[lc['Company']] || [cur.values[lc['First Name']], cur.values[lc['Last Name']]].join(' ')).trim() });
+  }
   log_(ss, me_(), normEmail_(cur.values[lc['Email']]), 'OUTCOME', leadId,
     (outcome || 'Outcome cleared') + (note ? ' - ' + note : ''), '', '');
   return repliesData_(ss);
@@ -2895,11 +3132,14 @@ function repliesHtml_(T, data) {
     'var a=el("a",null,"Open in Gmail ↗");a.href="https://mail.google.com/mail/?authuser="+encodeURIComponent(it.inbox)+"#search/"+encodeURIComponent("from:"+it.email);a.target="_blank";top.appendChild(a);c.appendChild(top);' +
     'c.appendChild(el("div","snip",it.snippet||"(no reply text saved)"));if(it.notes)c.appendChild(el("div","notes","Notes: "+it.notes));' +
     'var row=el("div","row");var note=el("input","note");note.placeholder="Note (optional), e.g. call Tuesday";' +
-    'D.outcomes.forEach(function(o){var b=el("button","oc"+(it.outcome==o?" on":""),o);b.onclick=function(){save(it,o,note.value,c);};row.appendChild(b);});' +
+    'D.outcomes.forEach(function(o){var b=el("button","oc"+(it.outcome==o?" on":""),o);b.onclick=function(){if(o=="Customer")return askAmount(it,note,c);save(it,o,note.value,c);};row.appendChild(b);});' +
     'row.appendChild(note);c.appendChild(row);L.appendChild(c);});}' +
-    'function save(it,o,n,c){c.style.opacity=.5;document.getElementById("msg").textContent="Saving...";' +
+    'function askAmount(it,note,c){if(c.querySelector(".amt"))return;var w=el("div","row amt");w.style.marginTop="8px";' +
+    'var a=el("input","note");a.placeholder="How much did they pay? (' + CURRENCY + ') Leave empty if not paid yet";a.inputMode="decimal";' +
+    'var b=el("button","oc on","Save as Customer");b.onclick=function(){save(it,"Customer",note.value,c,a.value);};w.appendChild(a);w.appendChild(b);c.appendChild(w);a.focus();}' +
+    'function save(it,o,n,c,amt){c.style.opacity=.5;document.getElementById("msg").textContent="Saving...";' +
     'google.script.run.withSuccessHandler(function(d){D=d;document.getElementById("msg").textContent="Saved: "+(it.name||it.email)+" → "+o;render();})' +
-    '.withFailureHandler(function(e){c.style.opacity=1;document.getElementById("msg").textContent="Could not save: "+(e&&e.message?e.message:e);}).slot6("outcome",it.id,o,n);}' +
+    '.withFailureHandler(function(e){c.style.opacity=1;document.getElementById("msg").textContent="Could not save: "+(e&&e.message?e.message:e);}).slot6("outcome",it.id,o,n,amt||"");}' +
     'render();</script>';
 }
 
@@ -3080,6 +3320,268 @@ function reportHtml_(T, r) {
     '<script>function copy(){var t=document.getElementById("txt");t.select();var ok=false;try{ok=document.execCommand("copy");}catch(e){}' +
     'if(!ok&&navigator.clipboard){navigator.clipboard.writeText(t.value).then(function(){m("Copied.");},function(){m("Could not copy automatically.");});return;}' +
     'm(ok?"Copied. Paste it into WhatsApp or an email.":"Could not copy automatically.");}function m(s){document.getElementById("msg").textContent=s;}</script>';
+}
+
+// ---------------------------------------------------------------- earnings: record sales, team board
+
+var EARN_HEADERS = ['Date', 'Client', 'Lead Email', 'Amount', 'What they bought', 'Recorded By', 'Notes'];
+var BOARD_TAB = 'Earnings Board';      // in the admin's sheet and in the shared board sheet
+var TEAM_BOARD_TAB = 'Team Earnings';  // each person's own copy of the team board
+
+// Outreach -> 💰 Earnings: record a sale, see your total and the team board. Uses the loader's spare slot 10.
+// The window calls slot10('add', sale) to save a sale.
+function slot10(action, sale) {
+  if (action === 'add') { addSale_(ss_(), sale); return earningsData_(ss_()); }
+  askAllPermissions_();
+  var ss = ss_();
+  loadTheme_(ss);
+  try { syncTeamBoard_(ss, true); } catch (e) { /* the window says the board is not set up */ }
+  var html = HtmlService.createHtmlOutput(earningsHtml_(THEME, earningsData_(ss))).setWidth(860).setHeight(680);
+  SpreadsheetApp.getUi().showModalDialog(html, '💰 Earnings');
+}
+
+function earnSheet_(ss) {
+  return ensureSheet_(ss, SHEET.EARN, EARN_HEADERS);
+}
+
+// Saves one sale. sale: { date, client, email, amount, what, notes }.
+function addSale_(ss, sale) {
+  var amount = Number(String(sale.amount || '').replace(/[^0-9.\-]/g, ''));
+  if (!(amount > 0)) throw new Error('Type the amount as a number, e.g. 250.');
+  var client = String(sale.client || '').trim();
+  var email = normEmail_(sale.email);
+  if (!client && !email) throw new Error('Type the client\'s name or email.');
+  var date = sale.date ? new Date(sale.date) : new Date();
+  if (isNaN(date.getTime())) date = new Date();
+  var sh = earnSheet_(ss);
+  var ec = colMap_(sh);
+  var row = [];
+  row[ec['Date']] = date; row[ec['Client']] = client; row[ec['Lead Email']] = email; row[ec['Amount']] = amount;
+  row[ec['What they bought']] = String(sale.what || '').trim(); row[ec['Recorded By']] = me_();
+  row[ec['Notes']] = String(sale.notes || '').trim();
+  for (var i = 0; i < sh.getLastColumn(); i++) if (row[i] === undefined) row[i] = '';
+  withLock_(function () { sh.appendRow(row); });
+  sh.getRange(sh.getLastRow(), ec['Date'] + 1).setNumberFormat('yyyy-mm-dd');
+  sh.getRange(sh.getLastRow(), ec['Amount'] + 1).setNumberFormat('#,##0.00');
+  // The lead becomes a Customer.
+  if (email) {
+    var ld = ss.getSheetByName(SHEET.LEADS);
+    var lc = colMap_(ld);
+    if (ld.getLastRow() > 1) {
+      var em = ld.getRange(2, lc['Email'] + 1, ld.getLastRow() - 1, 1).getValues();
+      for (var r = 0; r < em.length; r++) {
+        if (normEmail_(em[r][0]) === email) { ld.getRange(r + 2, lc['Outcome'] + 1).setValue('Customer'); break; }
+      }
+    }
+  }
+  log_(ss, me_(), email, 'SALE', '', CURRENCY + amount + (client ? ' from ' + client : ''), '', '');
+}
+
+// This sheet's sales, newest first, plus the team board (if the admin has shared one).
+function earningsData_(ss) {
+  var sh = ss.getSheetByName(SHEET.EARN);
+  var tz = ss.getSpreadsheetTimeZone();
+  var mine = [], total = 0, month = 0;
+  var monthStart = Utilities.formatDate(new Date(), tz, 'yyyy-MM');
+  if (sh && sh.getLastRow() > 1) {
+    var ec = colMap_(sh);
+    sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues().forEach(function (x) {
+      var amt = Number(x[ec['Amount']]) || 0;
+      if (!amt) return;
+      var d = x[ec['Date']];
+      total += amt;
+      if (d instanceof Date && Utilities.formatDate(d, tz, 'yyyy-MM') === monthStart) month += amt;
+      mine.push({ date: d instanceof Date ? Utilities.formatDate(d, tz, 'd MMM yyyy') : '', t: d instanceof Date ? d.getTime() : 0,
+                  client: String(x[ec['Client']] || x[ec['Lead Email']] || ''), what: String(x[ec['What they bought']] || ''), amount: amt });
+    });
+  }
+  mine.sort(function (a, b) { return b.t - a.t; });
+  var board = null, boardNote = '';
+  var tb = ss.getSheetByName(TEAM_BOARD_TAB) || ss.getSheetByName(BOARD_TAB);
+  if (tb && tb.getLastRow() > 4) {
+    board = tb.getRange(4, 1, tb.getLastRow() - 3, 6).getDisplayValues()
+      .filter(function (r) { return r.join('') !== ''; });
+  } else {
+    boardNote = TEAM_BOARD ? 'The team board could not be opened yet. Ask your admin to share it with you (Viewer).'
+      : 'Your admin has not set up the team Earnings Board yet.';
+  }
+  return { currency: CURRENCY, total: total, month: month, count: mine.length, mine: mine.slice(0, 50),
+           today: Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd'), board: board, boardNote: boardNote,
+           leads: earnLeadOptions_(ss) };
+}
+
+// Leads who replied, as suggestions for "Client" in the sale form.
+function earnLeadOptions_(ss) {
+  var ld = ss.getSheetByName(SHEET.LEADS);
+  if (!ld || ld.getLastRow() < 2) return [];
+  var lc = colMap_(ld);
+  var out = [];
+  ld.getRange(2, 1, ld.getLastRow() - 1, ld.getLastColumn()).getValues().forEach(function (r) {
+    if (!(r[lc['Replied At']] instanceof Date) && String(r[lc['Status']]).trim() !== STATUS.REPLIED) return;
+    out.push({ email: normEmail_(r[lc['Email']]), name: [r[lc['First Name']], r[lc['Last Name']]].join(' ').trim(),
+               company: String(r[lc['Company']] || '') });
+  });
+  return out.slice(-300);
+}
+
+function earningsHtml_(T, data) {
+  return '<style>body{font-family:Arial,sans-serif;margin:0;padding:0 12px;color:#1D2333}' +
+    '.tabs{display:flex;gap:8px;margin:4px 0 12px}.tab{padding:9px 16px;border-radius:6px;border:2px solid ' + T.line + ';cursor:pointer;font-weight:bold;background:#fff}' +
+    '.tab.on{background:' + T.navy + ';color:' + T.onNavy + ';border-color:' + T.gold + '}' +
+    '.tiles{display:flex;gap:10px;margin-bottom:12px}.tile{flex:1;border:1px solid ' + T.line + ';border-top:3px solid ' + T.gold + ';border-radius:6px;padding:8px;text-align:center}' +
+    '.tile small{display:block;font-size:10px;font-weight:bold;color:' + T.muted + ';text-transform:uppercase}.tile b{font-size:26px;color:' + T.strong + '}' +
+    'form{display:grid;grid-template-columns:1fr 1fr;gap:8px;background:' + T.ivory + ';padding:12px;border-radius:6px}' +
+    'label{font-size:12px;font-weight:bold;color:#444}input{width:100%;box-sizing:border-box;padding:7px;border:1px solid #ccc;border-radius:4px;font-size:13px;margin-top:3px}' +
+    '.full{grid-column:1/3}.btn{background:' + T.navy + ';color:' + T.onNavy + ';border:2px solid ' + T.gold + ';border-radius:4px;padding:9px 18px;font-weight:bold;cursor:pointer}' +
+    'table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}td,th{padding:7px 8px;border-bottom:1px solid ' + T.line + ';text-align:left}' +
+    'th{background:' + T.navy + ';color:' + T.onNavy + ';font-size:11px}td.n{text-align:right;font-weight:bold}tr.top td{background:#F6E7B8}' +
+    '#msg{margin-left:10px;font-size:12px}.note{color:#666;font-size:13px;padding:20px;text-align:center}</style>' +
+    '<div class="tabs"><div class="tab on" id="t-me" onclick="show(\'me\')">💰 Record a sale</div><div class="tab" id="t-team" onclick="show(\'team\')">🏆 Team Earnings Board</div></div>' +
+    '<div id="me"></div><div id="team" style="display:none"></div>' +
+    '<datalist id="leads"></datalist>' +
+    '<script>var D=' + jsonForHtml_(data) + ';' +
+    'function money(v){return D.currency+Number(v).toLocaleString("en-US",{maximumFractionDigits:2});}' +
+    'function esc(s){var d=document.createElement("div");d.textContent=s;return d.innerHTML;}' +
+    'function show(w){["me","team"].forEach(function(x){document.getElementById(x).style.display=x==w?"":"none";document.getElementById("t-"+x).className="tab"+(x==w?" on":"");});}' +
+    'function render(){var h=\'<div class="tiles"><div class="tile"><small>My total</small><b>\'+money(D.total)+\'</b></div><div class="tile"><small>This month</small><b>\'+money(D.month)+\'</b></div><div class="tile"><small>Orders</small><b>\'+D.count+\'</b></div></div>\';' +
+    'h+=\'<form onsubmit="save(event)"><div><label>Client (name or company)<input id="client" list="leads" placeholder="Start typing a lead who replied"></label></div>\';' +
+    'h+=\'<div><label>Amount (\'+esc(D.currency)+\')<input id="amount" inputmode="decimal" placeholder="e.g. 250"></label></div>\';' +
+    'h+=\'<div><label>What they bought<input id="what" placeholder="e.g. Website, 3-month package"></label></div>\';' +
+    'h+=\'<div><label>Date<input id="date" type="date" value="\'+D.today+\'"></label></div>\';' +
+    'h+=\'<div class="full"><label>Notes (optional)<input id="notes"></label></div>\';' +
+    'h+=\'<div class="full"><button class="btn" id="go">Save this sale</button><span id="msg"></span></div></form>\';' +
+    'h+=\'<table><tr><th>Date</th><th>Client</th><th>What</th><th style="text-align:right">Amount</th></tr>\';' +
+    'if(!D.mine.length)h+=\'<tr><td colspan="4" class="note">No sales recorded yet. Your first one goes here.</td></tr>\';' +
+    'D.mine.forEach(function(s){h+="<tr><td>"+esc(s.date)+"</td><td>"+esc(s.client)+"</td><td>"+esc(s.what)+"</td><td class=n>"+money(s.amount)+"</td></tr>";});' +
+    'document.getElementById("me").innerHTML=h+"</table>";' +
+    'var dl=document.getElementById("leads");dl.innerHTML="";D.leads.forEach(function(l){var o=document.createElement("option");o.value=(l.name||l.email)+(l.company?" · "+l.company:"")+" <"+l.email+">";dl.appendChild(o);});' +
+    'var t="";if(!D.board){t=\'<div class="note">\'+esc(D.boardNote)+\'</div>\';}else{t="<table>";D.board.forEach(function(r,i){t+=i==0?"<tr>"+r.map(function(c){return "<th>"+esc(c)+"</th>";}).join("")+"</tr>":' +
+    '"<tr"+(i<=3&&r[0]?\' class="top"\':"")+">"+r.map(function(c,j){return "<td"+(j>=2?" class=n":"")+">"+esc(c)+"</td>";}).join("")+"</tr>";});t+="</table>";}' +
+    'document.getElementById("team").innerHTML=t;}' +
+    'function save(e){e.preventDefault();var c=document.getElementById("client").value,m=c.match(/<([^>]+)>$/);' +
+    'var sale={client:m?c.replace(/\\s*<[^>]+>$/,"").replace(/ · .*$/,""):c,email:m?m[1]:"",amount:document.getElementById("amount").value,what:document.getElementById("what").value,date:document.getElementById("date").value,notes:document.getElementById("notes").value};' +
+    'document.getElementById("go").disabled=true;document.getElementById("msg").textContent="Saving...";' +
+    'google.script.run.withSuccessHandler(function(d){D=d;render();document.getElementById("msg").textContent="Saved. 🎉";})' +
+    '.withFailureHandler(function(err){document.getElementById("go").disabled=false;document.getElementById("msg").textContent=(err&&err.message?err.message:err);}).slot10("add",sale);}' +
+    'render();</script>';
+}
+
+// ---- the team board
+
+// Each person's sales, worked out from their Earnings tab (for the admin's checks).
+function earnStats_(rows) {
+  var out = { earned: 0, orders: 0, biggest: 0, last: null };
+  if (!rows || rows.length < 2) return out;
+  var h = {};
+  rows[0].forEach(function (x, i) { h[String(x)] = i; });
+  for (var i = 1; i < rows.length; i++) {
+    var amt = Number(rows[i][h['Amount']]) || 0;
+    if (amt <= 0) continue;
+    out.earned += amt; out.orders++;
+    if (amt > out.biggest) out.biggest = amt;
+    var d = rows[i][h['Date']];
+    if (d instanceof Date && (!out.last || d > out.last)) out.last = d;
+  }
+  return out;
+}
+
+// The board's rows: everyone with at least one order, most earned first.
+function boardRows_(board, tz) {
+  var people = board.filter(function (e) { return e.stats && e.stats.orders > 0; });
+  people.sort(function (a, b) { return b.stats.earned - a.stats.earned; });
+  var medal = ['🥇', '🥈', '🥉'];
+  var rows = [['Rank', 'Name', 'Orders', 'Total earned', 'Biggest order', 'Last order']];
+  people.forEach(function (e, i) {
+    rows.push([medal[i] || String(i + 1), e.name, e.stats.orders, CURRENCY + fmtMoney_(e.stats.earned),
+               CURRENCY + fmtMoney_(e.stats.biggest), e.stats.last ? Utilities.formatDate(e.stats.last, tz, 'd MMM yyyy') : '']);
+  });
+  var tot = people.reduce(function (s, e) { return s + e.stats.earned; }, 0);
+  var ord = people.reduce(function (s, e) { return s + e.stats.orders; }, 0);
+  rows.push(['', 'TEAM TOTAL', ord, CURRENCY + fmtMoney_(tot), '', people.length + ' people with orders']);
+  return rows;
+}
+
+function fmtMoney_(n) {
+  var s = (Math.round(n * 100) / 100).toFixed(n % 1 ? 2 : 0);
+  return s.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+// Writes the board into a tab, styled like the Leaderboard.
+function writeBoardTab_(book, name, rows, updated) {
+  var T = THEME;
+  var sh = book.getSheetByName(name) || book.insertSheet(name);
+  sh.clear();
+  try { sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).breakApart(); } catch (e) { /* nothing merged */ }
+  sh.setHiddenGridlines(true);
+  sh.setTabColor(T.gold);
+  var W = 6;
+  [70, 220, 90, 150, 150, 170].forEach(function (w, i) { sh.setColumnWidth(i + 1, w); });
+  sh.getRange(1, 1, 2, W).setBackground(T.navy);
+  sh.setRowHeight(1, 44);
+  sh.getRange(1, 1, 1, W).merge().setValue('  💰  Earnings Board').setFontFamily(T.head).setFontSize(22)
+    .setFontWeight('bold').setFontColor(T.onNavy).setVerticalAlignment('bottom');
+  sh.getRange(2, 1, 1, W).merge().setValue('   Updated ' + updated + '   ·   everyone who has made a sale, most earned first   ·   ' + BRAND.name)
+    .setFontColor(T.gold2).setFontSize(9).setFontWeight('bold');
+  sh.getRange(3, 1, 1, W).setBackground(T.gold);
+  sh.setRowHeight(3, 4);
+  var body = rows.slice();
+  sh.getRange(4, 1, body.length, W).setValues(body).setFontFamily(T.body).setFontSize(12)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sh.getRange(4, 1, 1, W).setBackground(T.navy2).setFontColor(T.onNavy).setFontWeight('bold').setFontSize(9);
+  for (var i = 1; i < body.length - 1; i++) {
+    sh.setRowHeight(4 + i, 30);
+    sh.getRange(4 + i, 1, 1, W).setBackground(i <= 3 ? ['#F6E7B8', '#EEF0F4', '#F3E3D3'][i - 1] : (i % 2 ? T.ivory : '#FFFFFF'));
+  }
+  sh.getRange(5, 2, Math.max(1, body.length - 1), 1).setHorizontalAlignment('left').setFontWeight('bold');
+  sh.getRange(5, 4, Math.max(1, body.length - 1), 1).setFontWeight('bold');
+  sh.getRange(3 + body.length, 1, 1, W).setBackground(T.navy).setFontColor(T.gold2).setFontWeight('bold');
+  sh.setFrozenRows(4);
+  return sh;
+}
+
+// Admin: puts the board in the admin's own sheet and in the shared board sheet that the team sees.
+// The shared sheet is made the first time; its link must then go into TEAM_BOARD in Code.gs.
+function publishBoard_(ss, board, now) {
+  loadTheme_(ss);
+  var tz = ss.getSpreadsheetTimeZone();
+  var rows = boardRows_(board, tz);
+  var updated = Utilities.formatDate(now, tz, 'EEE d MMM yyyy, HH:mm');
+  writeBoardTab_(ss, BOARD_TAB, rows, updated);
+  var props = PropertiesService.getScriptProperties();
+  var id = (String(TEAM_BOARD).match(/[-\w]{25,}/) || [])[0] || props.getProperty('BOARD_ID');
+  var made = false, book;
+  try { book = id ? SpreadsheetApp.openById(id) : null; } catch (e) { book = null; }
+  if (!book) {
+    book = SpreadsheetApp.create(BRAND.name + ' - Earnings Board');
+    props.setProperty('BOARD_ID', book.getId());
+    made = true;
+  }
+  var tab = writeBoardTab_(book, BOARD_TAB, rows, updated);
+  var first = book.getSheets()[0];
+  if (first.getName() !== BOARD_TAB && first.getLastRow() === 0) book.deleteSheet(first);
+  book.setActiveSheet(tab);
+  if (made || !TEAM_BOARD) {
+    return '\n\n💰 EARNINGS BOARD: ' + (made ? 'made' : 'ready') + ' at ' + book.getUrl() +
+      '\nTo show it to your team (once): 1) open that link, Share it with your team as Viewer; ' +
+      '2) paste the link into TEAM_BOARD at the top of Code.gs and upload Code.gs to Drive again. (ADMIN-GUIDE.md, step 5)';
+  }
+  return '\n\nThe Earnings Board is updated.';
+}
+
+// Everyone: copies the team board into this sheet's "Team Earnings" tab (at most once an hour unless forced).
+function syncTeamBoard_(ss, force) {
+  if (!TEAM_BOARD) return;
+  var props = PropertiesService.getScriptProperties();
+  if (!force && Date.now() - Number(props.getProperty('BOARD_SYNC') || 0) < 3600000) return;
+  props.setProperty('BOARD_SYNC', String(Date.now()));
+  var id = (String(TEAM_BOARD).match(/[-\w]{25,}/) || [])[0];
+  if (!id || id === ss.getId()) return;
+  var src = SpreadsheetApp.openById(id).getSheetByName(BOARD_TAB);
+  if (!src || src.getLastRow() < 4) return;
+  var rows = src.getRange(4, 1, src.getLastRow() - 3, 6).getValues();
+  var updated = String(src.getRange(2, 1).getValue()).replace(/^\s*Updated\s*/, '').split('   ·')[0];
+  loadTheme_(ss);
+  writeBoardTab_(ss, TEAM_BOARD_TAB, rows, updated);
 }
 
 // ---------------------------------------------------------------- admin: own numbers on the Leaderboard
@@ -3315,10 +3817,12 @@ function refreshTeam_() {
   sh.getRange(2, tc['Reply %'] + 1, rows.length, 1).setNumberFormat('0.0%');
   sh.getRange(2, tc['Last email sent'] + 1, rows.length, 2).setNumberFormat('yyyy-mm-dd hh:mm');
   try { buildLeaderboard_(ss, board, now); } catch (e) { console.log('Leaderboard: ' + e.message); }
+  var boardMsg = '';
+  try { boardMsg = publishBoard_(ss, board, now); } catch (e) { boardMsg = '\n\nEarnings Board: could not update (' + e.message + ').'; }
   return 'Checked ' + (counts.ok + counts.check + counts.problem) + ' team sheets: ' +
     counts.ok + ' OK, ' + counts.check + ' to check, ' + counts.problem + ' with problems.\n\n' +
     (alertRows.length ? alertRows.length + ' new alerts were added to the Team Alerts tab.' : 'No new alerts.') +
-    '\n\nThe Leaderboard tab is updated.';
+    '\n\nThe Leaderboard tab is updated.' + boardMsg;
 }
 
 // One tab that ranks everyone: most emails sent first, then most replies.
@@ -3335,7 +3839,7 @@ function buildLeaderboard_(ss, board, now) {
   try { sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).breakApart(); } catch (e) { /* nothing merged */ }
   sh.setHiddenGridlines(true);
   sh.setTabColor(T.gold);
-  var heads = ['Rank', 'Name', 'Leads', 'Sent today', 'Sent (7 days)', 'Total sent', 'Replies', 'Reply %',
+  var heads = ['Rank', 'Name', 'Leads', 'Delivered today', 'Sent (7 days)', 'Delivered', 'Replies', 'Reply %',
                'Bounces', 'Bounce %', 'Meetings', 'Need outcome', 'To follow up', 'Follow-ups sent', 'Follow-ups today',
                'Follow-ups late', 'Replies after follow-up', 'Status'];
   var W = heads.length;
@@ -3343,18 +3847,18 @@ function buildLeaderboard_(ss, board, now) {
   widths.forEach(function (w, i) { sh.setColumnWidth(i + 1, w); });
 
   board.sort(function (a, b) {
-    return (b.stats.totalSent - a.stats.totalSent) || (b.stats.replies - a.stats.replies);
+    return ((b.stats.delivered || 0) - (a.stats.delivered || 0)) || (b.stats.replies - a.stats.replies);
   });
   var medal = ['🥇 1', '🥈 2', '🥉 3'];
   var rows = board.map(function (e, i) {
     var t = e.stats;
-    return [medal[i] || String(i + 1), e.name, t.leads || 0, t.sentToday, t.sent7, t.totalSent, t.replies,
+    return [medal[i] || String(i + 1), e.name, t.leads || 0, t.delivToday || 0, t.sent7, t.delivered || 0, t.replies,
             t.replyPct, t.bounced || 0, t.bouncePct, t.meetings, t.needOutcome || 0, t.followUp || 0,
             t.fuSent || 0, t.fuToday || 0, t.fuOverdue || 0, t.fuReplies || 0, e.status];
   });
   var sum = function (k) { return board.reduce(function (s, e) { return s + (Number(e.stats[k]) || 0); }, 0); };
   var emailed = sum('emailed');
-  var totals = ['', 'TEAM TOTAL', sum('leads'), sum('sentToday'), sum('sent7'), sum('totalSent'), sum('replies'),
+  var totals = ['', 'TEAM TOTAL', sum('leads'), sum('delivToday'), sum('sent7'), sum('delivered'), sum('replies'),
                 emailed ? sum('replies') / emailed : 0, sum('bounced'), emailed ? sum('bounced') / emailed : 0,
                 sum('meetings'), sum('needOutcome'), sum('followUp'), sum('fuSent'), sum('fuToday'), sum('fuOverdue'),
                 sum('fuReplies'), board.length + ' people'];
@@ -3364,7 +3868,7 @@ function buildLeaderboard_(ss, board, now) {
   sh.getRange(1, 1, 1, W).merge().setValue('  🏆  Leaderboard').setFontFamily(T.head).setFontSize(22)
     .setFontWeight('bold').setFontColor(T.onNavy).setVerticalAlignment('bottom');
   sh.getRange(2, 1, 1, W).merge().setValue('   Updated ' + Utilities.formatDate(now, ss.getSpreadsheetTimeZone(), 'EEE d MMM yyyy, HH:mm') +
-    '   ·   ranked by total emails sent, then replies   ·   ' + BRAND.name)
+    '   ·   ranked by emails delivered (sent minus bounces), then replies   ·   ' + BRAND.name)
     .setFontColor(T.gold2).setFontSize(9).setFontWeight('bold').setVerticalAlignment('top');
   sh.getRange(3, 1, 1, W).setBackground(T.gold);
   sh.setRowHeight(3, 4);
@@ -3414,7 +3918,8 @@ function lastTeamSnapshots_(hist) {
 function readTeamData_(book) {
   var get = function (name) { var sh = book.getSheetByName(name); return sh ? sh.getDataRange().getValues() : null; };
   return { leads: get(SHEET.LEADS), log: get(SHEET.LOG), inboxes: get(SHEET.INBOXES),
-           settings: get(SHEET.SETTINGS), dnc: get(SHEET.DNC), dashboard: !!book.getSheetByName(SHEET.DASH) };
+           settings: get(SHEET.SETTINGS), dnc: get(SHEET.DNC), dashboard: !!book.getSheetByName(SHEET.DASH),
+           earnings: get(SHEET.EARN) };
 }
 
 // Works out a team member's numbers from their raw tabs and flags anything that looks changed.
@@ -3472,12 +3977,13 @@ function analyzeTeam_(d, prev, now, todayStart) {
   // Log
   var log = d.log || [[]];
   var gh = idx(log[0]);
-  var logRows = 0, logSends = 0, sentToday = 0, sent7 = 0, lastSent = null, fuSent = 0, fuToday = 0;
+  var logRows = 0, logSends = 0, sentToday = 0, sent7 = 0, lastSent = null, fuSent = 0, fuToday = 0, bounceToday = 0;
   for (var i = 1; i < log.length; i++) {
     var ev = String(log[i][gh['Event']] || '');
     var ts = log[i][gh['Timestamp']];
     if (!ev && !ts) continue;
     logRows++;
+    if (ev === 'BOUNCE' && ts instanceof Date && ts >= todayStart) bounceToday++;
     if (SENT_EVENTS.indexOf(ev) < 0) continue;
     logSends++;
     if (ev !== 'SENT_1') { fuSent++; if (ts instanceof Date && ts >= todayStart) fuToday++; }
@@ -3501,6 +4007,8 @@ function analyzeTeam_(d, prev, now, todayStart) {
     if (Number(ibv[j][ih['Daily Limit']]) > SAFE_LIMIT) highLimit.push(normEmail_(ibv[j][ih['Inbox Email']]) + ' (' + Number(ibv[j][ih['Daily Limit']]) + ')');
     if (String(ibv[j][ih['Health']] || '').indexOf('🔴') >= 0) redHealth++;
   }
+
+  var money = earnStats_(d.earnings);
 
   // Do Not Contact
   var dnc = (d.dnc || [[]]).slice(1).filter(function (x) { return String(x[0]).trim() !== ''; }).length;
@@ -3567,7 +4075,9 @@ function analyzeTeam_(d, prev, now, todayStart) {
              replies: s.replies, replyPct: s.emailed ? s.replies / s.emailed : 0, meetings: s.meetings,
              waiting: s.waiting, activeInboxes: active, inboxes: inboxes, lastSent: lastSent,
              needOutcome: s.needOutcome, followUp: s.followUp,
-             fuSent: fuSent, fuToday: fuToday, fuOverdue: s.fuOverdue, fuReplies: s.fuReplies },
+             fuSent: fuSent, fuToday: fuToday, fuOverdue: s.fuOverdue, fuReplies: s.fuReplies,
+             delivered: Math.max(0, s.totalSent - s.bounced), delivToday: Math.max(0, sentToday - bounceToday),
+             earned: money.earned, orders: money.orders, biggest: money.biggest, last: money.last },
     snapshot: { leads: s.leads, waiting: s.waiting, totalSent: s.totalSent, logRows: logRows,
                 logSends: logSends, replies: s.replies, bounced: s.bounced, dnc: dnc }
   };

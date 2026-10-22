@@ -12,6 +12,10 @@ everything: who got which email, from which Gmail, follow-ups, replies and bounc
 | `LEAD-PROMPT.txt` | Everyone | The prompt for getting leads |
 | `SETUP.md` | Everyone | This guide |
 | `CHANGELOG.md` | Everyone | Every version and what changed (also in the sheet: **📧 Outreach → What's new**) |
+| `ADMIN-GUIDE.md` | Admin only | Running this system for **your own team**: your settings, your Drive, your boards, sending updates |
+
+**New here?** Once your sheet is set up (Part 1), click **📧 Outreach → 🎓 Start here**. It's a guided tour of every
+part of the system, with buttons that take you to each tab and window, a Do & don't page and a checklist.
 
 ---
 
@@ -159,6 +163,8 @@ and repairs the tabs. Leads, sends, replies, Gmails and Do Not Contact are never
 | **Settings** | All the controls | Column B only |
 | **Log** | Every send, reply, bounce and error | No |
 | **Do Not Contact** | Bounced and opted-out people. Never emailed again | Add people who ask by other means |
+| **Earnings** | Your sales: date, client, amount, what they bought | Use **💰 Earnings** (or type a row) |
+| **Team Earnings** | The team's Earnings Board, from your admin (updated every hour) | No |
 
 **Lead status:** New → In sequence → Completed. Or **Replied**, Bounced, Unsubscribed.
 **Needs message** = no message text; fill in the Message cell and set Status to New.
@@ -232,6 +238,15 @@ The Dashboard's top band shows how many replies need an outcome and how many are
 2. **Inboxes:** any 🟡 or 🔴? Read **Last Result**.
 3. **📧 Outreach → Replies: set outcomes & follow-ups.** Answer them, click the outcome. Then the To follow up list.
 4. Running low on New leads? Make and upload a new batch.
+
+## Sales: 💰 Earnings
+
+Every order you win goes in **📧 Outreach → 💰 Earnings → Record a sale**: client (start typing a lead who replied),
+amount, what they bought, date. It shows your total, this month and your orders. In the Replies window, clicking
+**Customer** asks for the amount and records the sale too.
+
+**Team Earnings Board:** everyone on the team who has made a sale, most earned first, with the team total.
+Your admin publishes it; you see it in the **Team Earnings** tab and in 💰 Earnings → Team Earnings Board.
 
 ## Team meeting: "My last 24 hours"
 
