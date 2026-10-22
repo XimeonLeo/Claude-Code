@@ -2,6 +2,14 @@
 
 Every version of the outreach tracker, newest first. The same list is in the sheet: **📧 Outreach → What's new**.
 
+## v40 · 2026-10-22 · Sent counts each person once; follow-ups counted separately
+
+- **Changed:** "Sent" and "Delivered" now count first emails only: each person once. Follow-ups no longer add to them; they have their own numbers (Follow-ups section, "Follow-ups sent"). _Where: Dashboard (every layout), Day by Day, My last 24 hours, Team tab and Leaderboard_
+- **Changed:** The goal and the daily standard count people reached (first emails delivered), not every email. _Where: Settings → Goal, Daily standard_
+- **Changed:** Inboxes -> Total Sent counts people emailed. Sent Today still counts every email, because the daily limit counts follow-ups too. _Where: Inboxes tab (hover over the column names)_
+
+After this update, click **📧 Outreach → 1. Set up / repair this sheet** (or **Apply the update to this sheet** in What's new).
+
 ## v39 · 2026-10-22 · Guided tour, Earnings, delivered first, ready for other teams
 
 - **New:** Guided tour for new people: 12 short steps through every part of the system, with buttons that open each tab and window, a Do & don't page, and a checklist of where you are. First-timers are pointed to it when they open the sheet. _Where: Outreach → 🎓 Start here_

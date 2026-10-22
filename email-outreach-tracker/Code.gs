@@ -57,8 +57,8 @@ if (typeof OUTREACH_CONFIG === 'object' && OUTREACH_CONFIG) {
 
 // Change both every time you publish a new version, and add what changed to CHANGELOG (further down).
 // People see the version in Outreach -> Which Gmail am I using?, and the changes in Outreach -> What's new.
-var CORE_BUILD = 39;
-var CORE_VERSION = 'v39';
+var CORE_BUILD = 40;
+var CORE_VERSION = 'v40';
 
 // Daily limits: anything from 1 up to Gmail's own cap. Above SAFE_LIMIT a free Gmail is more likely to be
 // flagged, so the sheet warns but allows it.
@@ -123,7 +123,7 @@ var DNC_HEADERS = ['Email or @domain', 'Reason', 'Added At'];
 
 var SETTINGS_DEF = [
   { key: 'name', label: 'Campaign name', value: 'Outreach Campaign', note: 'Shown on the Dashboard.' },
-  { key: 'goal', label: 'Goal (delivered messages)', value: 5000, note: 'Delivered = sent minus bounced. Counts first emails and follow-ups.' },
+  { key: 'goal', label: 'Goal (delivered messages)', value: 5000, note: 'Delivered = people emailed (first emails, each person once) minus bounces. Follow-ups are counted separately.' },
   { key: 'start', label: 'Campaign start date', value: 'TODAY', note: 'Day 1 of the campaign.' },
   { key: 'length', label: 'Campaign length (days)', value: 11, note: '' },
   { key: 'dailyLimit', label: 'Default daily limit per inbox', value: 35, note: 'Max emails (first + follow-ups) per Gmail per day, 1 to 500. To give one Gmail its own limit, type it in that Gmail\'s Daily Limit cell on the Inboxes tab. Free Gmail: 35 or less is safest.' },
@@ -146,7 +146,7 @@ var SETTINGS_DEF = [
   { key: 'defFu1', label: 'Default follow-up 1 (if a lead has none)', value: 'Hi {{first_name|there}}, just bumping this to the top of your inbox in case it got buried. Would it make sense to chat?', note: 'Only used when the lead has no Follow-up 1 Message. Leave blank to skip.' },
   { key: 'defFu2', label: 'Default follow-up 2 (if a lead has none)', value: 'Hi {{first_name|there}}, I will not keep filling your inbox, so this is my last note. If this is ever a priority, just reply and I will send details.', note: 'Only used when the lead has no Follow-up 2 Message. Leave blank to skip.' },
   { key: 'optOut', label: 'Opt-out line', value: 'P.S. Not relevant? Just reply "no" and I won\'t email you again.', note: 'Added to the end of every email. Leave blank for none.' },
-  { key: 'standard', label: 'Daily standard (emails sent per day)', value: '', note: 'Emails DELIVERED per day (sent minus bounces). Used by "My last 24 hours". Leave blank to use what your active Gmails can send today (daily limits, with warm-up).', added: true },
+  { key: 'standard', label: 'Daily standard (emails sent per day)', value: '', note: 'People reached per day: first emails DELIVERED (sent minus bounces, follow-ups not counted). Used by "My last 24 hours". Leave blank to use what your active Gmails can send today (daily limits, with warm-up).', added: true },
   { key: 'paused', label: 'Pause everything', value: false, note: 'Set TRUE to stop all sending right away.' },
   { key: 'layout', label: 'Dashboard layout', value: 'Classic', note: 'Classic, Executive, Scoreboard, Funnel, Inbox Command or Compact. Outreach -> Choose dashboard layout shows a preview of each.' },
   { key: 'theme', label: 'Colour theme', value: 'Navy & Gold', note: 'Navy & Gold, Emerald & Gold, Burgundy & Gold, Notion Style or ClickUp Style. Then click Outreach -> Apply colour theme.' }
@@ -274,6 +274,8 @@ function setupSheet() {
     ib.getRange(1, icm[w[0]] + 1).setNote(w[1] + ' The warm-up counts from the Campaign start date.');
     ib.setColumnWidth(icm[w[0]] + 1, 130);
   });
+  ib.getRange(1, icm['Sent Today'] + 1).setNote('Every email this Gmail sent today, follow-ups included, because the daily limit counts them all.');
+  ib.getRange(1, icm['Total Sent'] + 1).setNote('People this Gmail has emailed (first emails, each person once). Follow-ups are not counted here.');
   ib.getRange(1, icm['Daily Limit'] + 1).setNote('Type a number for this Gmail\'s own daily limit (1 to ' + MAX_LIMIT +
     '). Blank = the default in Settings. Warm-up still starts new Gmails lower and climbs to this number.');
   ib.getRange(2, icm['Bounce %'] + 1, INBOX_FORMULA_ROWS, 1).setNumberFormat('0.0%');
@@ -618,7 +620,7 @@ function writeInboxFormulas_(ib) {
   var rows = Math.max(INBOX_FORMULA_ROWS, lastFilledRow_(ib, ic['Inbox Email'] + 1) + 10);
   var formulas = {
     'Sent Today': function (a) { return 'COUNTIFS(Log!$B:$B,' + a + ',Log!$D:$D,"SENT*",Log!$A:$A,">="&TODAY())'; },
-    'Total Sent': function (a) { return 'COUNTIFS(Log!$B:$B,' + a + ',Log!$D:$D,"SENT*")'; },
+    'Total Sent': function (a) { return 'COUNTIFS(Log!$B:$B,' + a + ',Log!$D:$D,"SENT_1")'; },
     'Bounces': function (a) { return 'COUNTIFS(Log!$B:$B,' + a + ',Log!$D:$D,"BOUNCE")'; },
     'Bounce %': function (a, r) { return 'IFERROR(' + col('Bounces') + r + '/' + col('Total Sent') + r + ',0)'; },
     'Replies': function (a) { return 'COUNTIFS(Log!$B:$B,' + a + ',Log!$D:$D,"REPLY")+COUNTIFS(Log!$B:$B,' + a + ',Log!$D:$D,"UNSUB")'; },
@@ -774,7 +776,8 @@ function buildDashboard_(ss) {
     ['goal', '=' + V('Goal (delivered messages)')],
     ['start', '=INT(' + V('Campaign start date') + ')'],
     ['length', '=' + V('Campaign length (days)')],
-    ['sentAll', '=' + LOG('SENT*')], ['sentToday', '=' + LOG('SENT*', 1)],
+    // "Sent" = first emails only (each person once). Follow-ups are counted separately (fuAll, fuToday).
+    ['sentAll', '=' + LOG('SENT_1')], ['sentToday', '=' + LOG('SENT_1', 1)],
     ['firstAll', '=' + LOG('SENT_1')], ['firstToday', '=' + LOG('SENT_1', 1)],
     ['fuAll', '=' + LOG('SENT_FU*')], ['fuToday', '=' + LOG('SENT_FU*', 1)],
     ['replyAll', '=' + LOG('REPLY') + '+' + LOG('UNSUB')], ['replyToday', '=' + LOG('REPLY', 1) + '+' + LOG('UNSUB', 1)],
@@ -1008,7 +1011,7 @@ function buildDashboard_(ss) {
   var top = lastStatusRow + 3;
   panel(top, 2, 15, 'Day by Day');
   d.getRange(top + 1, 2, 1, 15).setBackground('#FFFFFF');
-  colHead(top + 1, [[2, 'DAY'], [3, 'DATE'], [4, 'SENT'], [6, 'FIRST EMAILS'], [7, 'FOLLOW-UPS'], [8, 'REPLIES'],
+  colHead(top + 1, [[2, 'DAY'], [3, 'DATE'], [4, 'SENT'], [6, 'DELIVERED'], [7, 'FOLLOW-UPS'], [8, 'REPLIES'],
     [10, 'BOUNCES'], [11, 'SENT PER DAY', 6]]);
   var rows = [];
   for (var n = 0; n < 30; n++) {
@@ -1019,7 +1022,7 @@ function buildDashboard_(ss) {
     rows.push([
       X('=IF(' + n + '<{length},' + (n + 1) + ',"")'),
       X('=IF($B' + r + '="","",{start}+' + n + ')'),
-      cnt('SENT*'), '', cnt('SENT_1'), cnt('SENT_FU*'),
+      cnt('SENT_1'), '', '=IF($C' + r + '="","",MAX(0,$D' + r + '-$J' + r + '))', cnt('SENT_FU*'),
       '=IF($C' + r + '="","",COUNTIFS(Log!$D:$D,"REPLY",Log!$A:$A,">="&$C' + r + ',Log!$A:$A,"<"&($C' + r + '+1))+COUNTIFS(Log!$D:$D,"UNSUB",Log!$A:$A,">="&$C' + r + ',Log!$A:$A,"<"&($C' + r + '+1)))',
       '', cnt('BOUNCE'),
       '=IF($C' + r + '="","",SPARKLINE($D' + r + ',{"charttype","bar";"max",MAX(1,MAX($D$' + (top + 2) + ':$D$' + (top + 31) + '));"color1","' + T.gold + '"}))'
@@ -1128,7 +1131,7 @@ function dashSeries_(c) {
       return 'COUNTIFS(Log!$D:$D,"' + ev + '",Log!$A:$A,">="&$T' + r + ',Log!$A:$A,"<"&($T' + r + '+1))';
     };
     rows.push([X('=IF(' + n + '<{length},{start}+' + n + ',"")'),
-      '=IF($T' + r + '="","",' + day('SENT*') + ')',
+      '=IF($T' + r + '="","",' + day('SENT_1') + ')',
       '=IF($T' + r + '="","",' + day('REPLY') + '+' + day('UNSUB') + ')',
       '=IF($T' + r + '="","",' + day('BOUNCE') + ')']);
   }
@@ -1344,7 +1347,7 @@ var DASH_LAYOUTS_ = {
     var d = c.d, T = c.T, X = c.X;
     var COLS4 = [2, 6, 10, 14];
     var tiles = [
-      ['Delivered today', '={delivToday}', c.num, dashTrend_(T, ['SENT*']), '="Sent "&TEXT({sentToday},"#,##0")&"  ·  need "&TEXT({needed},"#,##0")&" a day"'],
+      ['Delivered today', '={delivToday}', c.num, dashTrend_(T, ['SENT_1']), '="Sent "&TEXT({sentToday},"#,##0")&"  ·  need "&TEXT({needed},"#,##0")&" a day"'],
       ['Replies today', '={replyToday}', c.num, dashTrend_(T, ['REPLY', 'UNSUB']), '="Total "&TEXT({replyAll},"#,##0")'],
       ['Bounces today', '={bounceToday}', c.num, dashTrend_(T, ['BOUNCE'], T.bad), '="Rate "&TEXT({bounceRate},"0.0%")'],
       ['New people today', '={firstToday}', c.num, dashTrend_(T, ['SENT_1']), '="Total "&TEXT({firstAll},"#,##0")'],
@@ -2750,6 +2753,11 @@ function tourHtml_(T, start, status, newsHtml) {
 // Each item: [kind, what changed, where to find it]. kind: New, Improved, Fixed, Changed or Removed.
 // repair: true = people should click "Apply the update to this sheet" (runs Set up / repair).
 var CHANGELOG = [
+  { v: 40, date: '2026-10-22', title: 'Sent counts each person once; follow-ups counted separately', repair: true, items: [
+    ['Changed', '"Sent" and "Delivered" now count first emails only: each person once. Follow-ups no longer add to them; they have their own numbers (Follow-ups section, "Follow-ups sent").', 'Dashboard (every layout), Day by Day, My last 24 hours, Team tab and Leaderboard'],
+    ['Changed', 'The goal and the daily standard count people reached (first emails delivered), not every email.', 'Settings -> Goal, Daily standard'],
+    ['Changed', 'Inboxes -> Total Sent counts people emailed. Sent Today still counts every email, because the daily limit counts follow-ups too.', 'Inboxes tab (hover over the column names)']
+  ] },
   { v: 39, date: '2026-10-22', title: 'Guided tour, Earnings, delivered first, ready for other teams', repair: true, items: [
     ['New', 'Guided tour for new people: 12 short steps through every part of the system, with buttons that open each tab and window, a Do & don\'t page, and a checklist of where you are. First-timers are pointed to it when they open the sheet.', 'Outreach -> 🎓 Start here'],
     ['New', 'Earnings: record each sale (client, amount, what they bought). See your total, this month and your orders. Clicking "Customer" in the Replies window asks for the amount too.', 'Outreach -> 💰 Earnings, and the new Earnings tab'],
@@ -3163,7 +3171,7 @@ function reportData_(ss, now) {
   var tz = ss.getSpreadsheetTimeZone();
   var st = readSettings_(ss);
   var fmt = function (d, f) { return Utilities.formatDate(d, tz, f); };
-  var zero = function () { return { delivered: 0, first: 0, fu: 0, replies: 0, bounces: 0, sent: 0 }; };
+  var zero = function () { return { delivered: 0, fu: 0, replies: 0, bounces: 0, sent: 0 }; };
   var r = { campaign: st.name, by: me_(), made: fmt(now, 'EEE d MMM yyyy, HH:mm'), from: fmt(since, 'EEE d MMM, HH:mm'),
             day: zero(), all: zero(), leads: 0, waiting: 0, needOutcome: 0, followUp: 0, fuDue: 0, fuOverdue: 0,
             inboxes: [], problems: [] };
@@ -3177,11 +3185,12 @@ function reportData_(ss, now) {
     var ev = String(x[3]);
     var bucks = x[0] instanceof Date && x[0] >= since ? [r.all, r.day] : [r.all];
     bucks.forEach(function (b) {
-      if (ev.indexOf('SENT') === 0) {
+      // Sent and delivered count first emails only (each person once). Follow-ups are counted on their own.
+      if (ev === 'SENT_1') {
         b.sent++;
-        if (bounced[String(x[4])]) return;
-        b.delivered++;
-        if (ev === 'SENT_1') b.first++; else b.fu++;
+        if (!bounced[String(x[4])]) b.delivered++;
+      } else if (ev.indexOf('SENT_FU') === 0) {
+        b.fu++;
       } else if (ev === 'REPLY' || ev === 'UNSUB') {
         b.replies++;
       } else if (ev === 'BOUNCE') {
@@ -3256,9 +3265,9 @@ function reportText_(r) {
     'Made ' + r.made,
     '',
     '            LAST 24 HOURS | SO FAR',
+    both('Sent (people emailed)', r.day.sent, r.all.sent),
     both('Delivered', r.day.delivered, r.all.delivered),
-    both('  first emails', r.day.first, r.all.first),
-    both('  follow-ups', r.day.fu, r.all.fu),
+    both('Follow-ups sent', r.day.fu, r.all.fu),
     both('Replies', r.day.replies, r.all.replies),
     both('Bounces', r.day.bounces + p(r.day.bounces, r.day.sent), r.all.bounces + p(r.all.bounces, r.all.sent)),
     '',
@@ -3298,9 +3307,9 @@ function reportHtml_(T, r) {
     'textarea{position:absolute;left:-9999px}#msg{margin-left:10px;color:' + T.good + ';font-size:12px}</style>' +
     '<div class="band"><b>📊 ' + esc(r.campaign) + '</b><div>Made ' + esc(r.made) + '   ·   ' + esc(r.by) + '</div></div>' +
     '<table><thead><tr><td></td><td>LAST 24 HOURS</td><td>SO FAR</td></tr></thead>' +
-    row('Delivered <i style="color:#888;font-size:11px">(sent, minus bounces)</i>', n(r.day.delivered), n(r.all.delivered), 'big') +
-    row('first emails', n(r.day.first), n(r.all.first), 'sub') +
-    row('follow-ups', n(r.day.fu), n(r.all.fu), 'sub') +
+    row('Delivered <i style="color:#888;font-size:11px">(people emailed, minus bounces)</i>', n(r.day.delivered), n(r.all.delivered), 'big') +
+    row('sent (people emailed)', n(r.day.sent), n(r.all.sent), 'sub') +
+    row('Follow-ups sent <i style="color:#888;font-size:11px">(counted separately)</i>', n(r.day.fu), n(r.all.fu)) +
     row('Replies', n(r.day.replies), n(r.all.replies)) +
     row('Bounces', n(r.day.bounces) + p(r.day.bounces, r.day.sent), n(r.all.bounces) + p(r.all.bounces, r.all.sent)) +
     row('Daily standard', '<span class="' + (r.met ? 'ok' : 'no') + '">' + (r.met ? '✅ ' : '❌ ') + n(r.day.delivered) + ' / ' + n(r.standard) + '</span>' +
@@ -3988,8 +3997,8 @@ function analyzeTeam_(d, prev, now, todayStart) {
     logSends++;
     if (ev !== 'SENT_1') { fuSent++; if (ts instanceof Date && ts >= todayStart) fuToday++; }
     if (ts instanceof Date) {
-      if (ts >= todayStart) sentToday++;
-      if (now - ts < 7 * day) sent7++;
+      if (ev === 'SENT_1' && ts >= todayStart) sentToday++;
+      if (ev === 'SENT_1' && now - ts < 7 * day) sent7++;
       if (!lastSent || ts > lastSent) lastSent = ts;
     }
   }
@@ -4071,12 +4080,12 @@ function analyzeTeam_(d, prev, now, todayStart) {
   return {
     flags: flags,
     stats: { leads: s.leads, bounced: s.bounced, emailed: s.emailed,
-             sentToday: sentToday, sent7: sent7, totalSent: s.totalSent, bouncePct: bouncePct,
+             sentToday: sentToday, sent7: sent7, totalSent: s.emailed, bouncePct: bouncePct,
              replies: s.replies, replyPct: s.emailed ? s.replies / s.emailed : 0, meetings: s.meetings,
              waiting: s.waiting, activeInboxes: active, inboxes: inboxes, lastSent: lastSent,
              needOutcome: s.needOutcome, followUp: s.followUp,
              fuSent: fuSent, fuToday: fuToday, fuOverdue: s.fuOverdue, fuReplies: s.fuReplies,
-             delivered: Math.max(0, s.totalSent - s.bounced), delivToday: Math.max(0, sentToday - bounceToday),
+             delivered: Math.max(0, s.emailed - s.bounced), delivToday: Math.max(0, sentToday - bounceToday),
              earned: money.earned, orders: money.orders, biggest: money.biggest, last: money.last },
     snapshot: { leads: s.leads, waiting: s.waiting, totalSent: s.totalSent, logRows: logRows,
                 logSends: logSends, replies: s.replies, bounced: s.bounced, dnc: dnc }

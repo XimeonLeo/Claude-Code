@@ -175,7 +175,7 @@ Status back to New (or In sequence for a follow-up). Other leads keep sending in
 
 | Setting | Default | Meaning |
 |---|---|---|
-| Goal | 5000 | Target on the Dashboard |
+| Goal | 5000 | Target on the Dashboard: people reached (first emails delivered). Follow-ups don't count toward it |
 | Campaign start date / length | today / 11 | For "days left" |
 | Default daily limit per inbox | 35 | Most emails per Gmail per day, **1 to 500**. 35 or less is safest for a free Gmail. To give **one Gmail its own limit**, type it in its **Daily Limit** cell on the Inboxes tab (blank = this default) |
 | Warm-up: day 1 limit / increase | 20 / 5 | New Gmails start at 20 a day, +5 a day. To give **one Gmail its own warm-up**, fill its **Warm-up Day 1** and **Warm-up Per Day** cells on the Inboxes tab (blank = this default, 0 on day 1 = no warm-up for that Gmail) |
@@ -254,8 +254,9 @@ Your admin publishes it; you see it in the **Team Earnings** tab and in 💰 Ear
 
 | | Last 24 hours | So far |
 |---|---|---|
-| **Delivered** (sent, minus bounces) | ✓ | ✓ |
-| first emails / follow-ups | ✓ | ✓ |
+| **Delivered** (people emailed, minus bounces) | ✓ | ✓ |
+| sent (people emailed: first emails, each person once) | ✓ | ✓ |
+| Follow-ups sent (counted separately) | ✓ | ✓ |
 | Replies | ✓ | ✓ |
 | Bounces | ✓ | ✓ |
 | Daily standard | ✅ met or ❌ how many short | |
@@ -325,7 +326,7 @@ You get four new tabs:
 
 | Tab | What it shows |
 |---|---|
-| **Leaderboard** | Everyone ranked in one place (most sent first, then most replies): leads, sent today, last 7 days, total sent, replies, reply %, bounces, bounce %, meetings, status, plus a team total. 🥇🥈🥉 for the top three. Updated with every check |
+| **Leaderboard** | Everyone ranked in one place (most delivered first, then most replies): leads, sent today, last 7 days, total sent, replies, reply %, bounces, bounce %, meetings, status, plus a team total. 🥇🥈🥉 for the top three. Updated with every check |
 | **Team** | One row per person: 🟢 OK / 🟡 Check / 🔴 Problem, what's wrong now, sent today, last 7 days, total, bounce %, replies, meetings, leads waiting, active Gmails, last email sent, and a link to open their dashboard |
 | **Team Alerts** | Every problem found, with the date and time and how to check it. It's kept even after they fix it |
 | **Team History** | Their numbers at every check, so you can see progress over time |
